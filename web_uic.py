@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from assistant import NSSFAssistant
 from scrapper import scrape_all_pages  
-
+from chat_db import init_db, create_session, save_message, get_all_sessions, get_session_messages, delete_session
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
@@ -19,6 +19,7 @@ class AppState:
         self.ready     = False
         self.error     = ""
         self.lock      = threading.Lock()
+        self.session_id = None
 
     def load(self):
         if not GROQ_API_KEY:
@@ -50,6 +51,8 @@ class AppState:
             self.status    = "Connecting to Groq assistant..."
             self.assistant = NSSFAssistant(api_key=GROQ_API_KEY,
                                            nssf_context=context)
+            init_db()
+            self.session_id = create_session()
             self.ready  = True
             self.status = "Ready"
 
@@ -57,13 +60,26 @@ class AppState:
             self.error  = str(exc)
             self.status = "Startup failed"
 
-    def ask(self, question: str) -> dict:
+    def ask(self, question: str, session_id: int = None) -> dict:
         if not self.ready or not self.assistant:
             return {"ok": False, "answer": "",
                     "error": "Assistant is still loading. Please wait."}
         with self.lock:
+            if session_id:
+                self.session_id = session_id
+            elif not self.session_id:
+                self.session_id = create_session()
+
             answer = self.assistant.ask(question)
-        return {"ok": True, "answer": answer, "error": ""}
+            save_message(self.session_id, "User", question)
+            save_message(self.session_id, "Nicky", answer)
+
+        return {"ok": True, "answer": answer, "error": "", "session_id": self.session_id}
+
+    def new_session(self) -> dict:
+        with self.lock:
+            self.session_id = create_session()
+        return {"ok": True, "session_id": self.session_id}
 
 
 STATE = AppState()
@@ -80,20 +96,19 @@ HTML = r"""<!doctype html>
     @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600&display=swap');
 
     :root {
-      --bg:      #120800;
-      --ember:   #8B2500;
-      --amber:   #C45000;
-      --gold:    #FFB627;
-      --cream:   #FFF3DC;
-      --sage:    #2ECC71;
-      --rose:    #FF6B6B;
-      --slate:   #1E0F00;
-      --slate2:  #2A1500;
-      --muted:   #A07850;
-      --border:  #5A2800;
+      --bg:      #07111F;
+      --ember:   #0F2A44;
+      --amber:   #2563EB;
+      --gold:    #FBBF24;
+      --cream:   #F8FAFC;
+      --sage:    #22C55E;
+      --rose:    #EF4444;
+      --slate:   #0B1726;
+      --slate2:  #132235;
+      --muted:   #94A3B8;
+      --border:  #274763;
       --white:   #FFFFFF;
     }
-
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -468,6 +483,89 @@ HTML = r"""<!doctype html>
       .input-row { flex-wrap: wrap; }
       .btn { width: 100%; }
     }
+
+    /* ── HISTORY SIDEBAR ── */
+    .history-panel {
+      width: 240px;
+      flex-shrink: 0;
+      background: var(--slate2);
+      border-right: 2px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .history-header {
+      padding: 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .history-title {
+      font-family: 'Nunito', sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--gold);
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .btn-new {
+      width: 100%;
+      background: var(--gold);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .history-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .history-item {
+      padding: 10px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      position: relative;
+    }
+
+    .history-item:hover {
+      background: var(--slate);
+      border-color: var(--gold);
+    }
+
+    .history-item.active {
+      background: var(--amber);
+      color: var(--bg);
+    }
+
+    .history-item-delete {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: transparent;
+      border: none;
+      color: var(--rose);
+      cursor: pointer;
+      display: none;
+    }
+
+    .history-item:hover .history-item-delete {
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -487,6 +585,15 @@ HTML = r"""<!doctype html>
     </div>
   </div>
 </header>
+
+<!-- HISTORY SIDEBAR -->
+<aside class="history-panel">
+  <div class="history-header">
+    <div class="history-title">📜 History</div>
+    <button class="btn-new" onclick="newChat()">+ New Chat</button>
+  </div>
+  <div class="history-list" id="historyList"></div>
+</aside>
 
 <!-- TICKER -->
 <div class="ticker">
@@ -617,6 +724,7 @@ HTML = r"""<!doctype html>
 
   // ── State ───────────────────────────────────────────────────────────────────
   let ready        = false;
+  let currentSessionId = null;
   let voiceReplies = true;
   let msgCount     = 0;
   let waveAngle    = 0;
@@ -753,6 +861,80 @@ HTML = r"""<!doctype html>
       addSystem("Voice replies turned off.");
     }
   });
+  // ── Load chat history ────────────────────────────────────────────────────────
+  async function loadHistory() {
+    try {
+      const res = await fetch("/api/history");
+      const sessions = await res.json();
+      const historyListEl = document.getElementById("historyList");
+      historyListEl.innerHTML = "";
+      sessions.forEach(session => {
+        const el = document.createElement("div");
+        el.className = "history-item";
+        if (session.id === currentSessionId) el.classList.add("active");
+        const date = new Date(session.updated_at).toLocaleDateString();
+        el.innerHTML = `
+          <div style="font-weight:600;margin-bottom:2px;">${escapeHtml(session.title.substring(0, 20))}</div>
+          <div style="font-size:11px;opacity:0.7;">${date}</div>
+          <button class="history-item-delete" onclick="deleteChat(event, ${session.id})">✕</button>
+        `;
+        el.onclick = () => loadSession(session.id);
+        historyListEl.appendChild(el);
+      });
+    } catch (e) {
+      console.error("Failed to load history:", e);
+    }
+  }
+
+
+  async function loadSession(sessionId) {
+    try {
+      const res = await fetch(`/api/session/${sessionId}`);
+      const data = await res.json();
+      currentSessionId = sessionId;
+      chatEl.innerHTML = "";
+      msgCount = 0;
+      msgCountEl.textContent = "0 messages";
+      data.messages.forEach(msg => {
+        addMessage(msg.sender, msg.content, msg.sender === "Nicky" ? "bot" : "user");
+      });
+      loadHistory();
+    } catch (e) {
+      console.error("Failed to load session:", e);
+      addSystem("Failed to load session.");
+    }
+  }
+
+  async function newChat() {
+    chatEl.innerHTML = '';
+    msgCount = 0;
+    msgCountEl.textContent = "0 messages";
+    questionEl.value = "";
+    try {
+      const res = await fetch("/api/new-session", { method: "POST" });
+      const data = await res.json();
+      currentSessionId = data.session_id || null;
+    } catch (e) {
+      console.error("Failed to create new session:", e);
+      currentSessionId = null;
+    }
+    addMessage("Nicky", "Hello! Starting a new conversation. What would you like to know about NSSF?", "bot");
+    loadHistory();
+  }
+
+  async function deleteChat(event, sessionId) {
+    event.stopPropagation();
+    if (confirm("Delete this chat?")) {
+      try {
+        await fetch(`/api/session/${sessionId}`, { method: "DELETE" });
+        loadHistory();
+        if (currentSessionId === sessionId) newChat();
+      } catch (e) {
+        console.error("Failed to delete chat:", e);
+        addSystem("Failed to delete chat.");
+      }
+    }
+  }
 
   // ── Status polling ───────────────────────────────────────────────────────────
   async function checkStatus() {
@@ -766,7 +948,11 @@ HTML = r"""<!doctype html>
       sendBtn.disabled = !ready;
       micBtn.disabled  = !ready || !SpeechRecognition;
       if (!ready) setTimeout(checkStatus, 1200);
-      else setNickyState("idle");
+      else {
+        loadHistory();
+        newChat();
+        setNickyState("idle");
+      }
     } catch {
       statusEl.textContent = "Cannot reach local server.";
     }
@@ -789,13 +975,14 @@ HTML = r"""<!doctype html>
       const res  = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify({ question: q, session_id: currentSessionId }),
       });
       const data = await res.json();
       if (!data.ok) {
         addSystem(data.error || "Something went wrong.");
         setNickyState("idle");
       } else {
+        if (data.session_id) currentSessionId = data.session_id;
         addMessage("Nicky", data.answer, "bot");
         speak(data.answer);
         if (!voiceReplies) setNickyState("idle");
@@ -808,6 +995,7 @@ HTML = r"""<!doctype html>
       sendBtn.disabled = false;
       micBtn.disabled  = !SpeechRecognition;
       questionEl.focus();
+      loadHistory();
     }
   }
 
@@ -894,9 +1082,39 @@ class WebUIHandler(BaseHTTPRequestHandler):
                 "error":  STATE.error,
             })
         else:
+            if self.path == "/api/history":
+                  sessions = get_all_sessions()
+                  self._send_json(sessions)
+                  return
+            if self.path.startswith("/api/session/"):
+                try:
+                    session_id = int(self.path.split("/")[-1])
+                    messages = get_session_messages(session_id)
+                    self._send_json({"messages": messages})
+                    return
+                except:
+                    self.send_error(400) 
+                    return
+
             self.send_error(404)
+    def do_DELETE(self):
+        if self.path.startswith("/api/session/"):
+            try:
+                session_id = int(self.path.split("/")[-1])
+                delete_session(session_id)
+                self._send_json({"ok": True})
+                return
+            except:
+                  self.send_error(400)
+                  return
+        self.send_error(404)
+
 
     def do_POST(self):
+        if self.path == "/api/new-session":
+            self._send_json(STATE.new_session())
+            return
+
         if self.path != "/api/ask":
             self.send_error(404)
             return
@@ -905,11 +1123,14 @@ class WebUIHandler(BaseHTTPRequestHandler):
             raw      = self.rfile.read(length).decode("utf-8")
             payload  = json.loads(raw or "{}")
             question = payload.get("question", "").strip()
+            session_id = payload.get("session_id")
+            if session_id is not None:
+                session_id = int(session_id)
             if not question:
                 self._send_json({"ok": False, "answer": "",
                                  "error": "Question is empty."})
                 return
-            self._send_json(STATE.ask(question))
+            self._send_json(STATE.ask(question, session_id=session_id))
         except Exception as exc:
             self._send_json({"ok": False, "answer": "",
                              "error": str(exc)}, status=500)
@@ -958,11 +1179,11 @@ def main():
     server = make_server(args.host, args.port)
     host, port = server.server_address
     url = f"http://{host}:{port}"
-    print(f"\n[WebUI] ✅ Server running at {url}")
+    print(f"\n[WebUI] Server running at {url}")
     print("[WebUI] Opening browser automatically...")
     print("[WebUI] Press Ctrl+C to stop.\n")
 
-    # ✅ Auto-open browser after short delay
+    # Auto-open browser after short delay
     threading.Timer(1.2, lambda: webbrowser.open(url)).start()
 
     try:
@@ -975,3 +1196,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
