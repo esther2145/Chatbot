@@ -45,8 +45,7 @@ The API is now at http://localhost:8000 (try http://localhost:8000/health).
 Run the ingestion pipeline against the running Qdrant:
 
     cd ingestion
-    pip install -r requirements.txt
-    OPENAI_API_KEY=sk-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
+    pip install -r requirements.tx
 CHAT_MODEL=gpt-4o-mini QDRANT_URL=http://localhost:6333 python ingest.py
 
 Edit `SEED_URLS` in `ingest.py` to point at the exact NSSF pages you want.
