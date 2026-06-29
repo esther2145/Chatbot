@@ -39,8 +39,8 @@ button:disabled {
 }
 
 .logo {
-  width: 150px;
-  height: 100px;
+  width: 200px;
+  height: 200px;
   object-fit: contain;
   object-position: left center;
   margin-bottom: 38px;
