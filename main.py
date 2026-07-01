@@ -8,8 +8,8 @@ from voice import build_tts_engine, speak, listen, get_input_mode
 # --- CONFIGURATION ------------------------------------------------------------
 
 # Option A: Hard-code your key here (not recommended for shared projects)
-#GEMINI_API_KEY = "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"  # Replace with your actual Gemini API key
-# Option B (recommended): Set environment variable GEMINI_API_KEY and use this:
+#GROQ_API_KEY = "your_groq_api_key_here"  # Replace with your actual GROQ API key
+# Option B (recommended): Set environment variable GROQ_API_KEY and use this:
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 # --- MAIN ---------------------------------------------------------------------
