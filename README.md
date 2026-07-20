@@ -1,5 +1,9 @@
 # NSSF Assistant (Nicky) — Backend
 
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete architecture,
+component responsibilities, data flows, API reference, configuration,
+deployment model, troubleshooting, and production considerations.
+
 A retrieval-augmented chatbot that answers NSSF Uganda questions from the
 official website content. FastAPI backend + Qdrant vector database + OpenAI,
 with conversation memory, source citations, streaming answers, and optional
