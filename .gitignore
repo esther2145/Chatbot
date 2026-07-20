@@ -2,26 +2,35 @@
 .env
 .env.*
 !.env.example
+.envrc
+*.local
 *.pem
 *.key
 *.crt
 *.p12
 *.pfx
+*.cer
+*.jks
+secrets/
 
 # Python bytecode and caches
 __pycache__/
 *.py[cod]
 *$py.class
 .python-version
+.cache/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.pytype/
 .pyre/
+.pyright/
 .coverage
 .coverage.*
 htmlcov/
 .tox/
 .nox/
+.hypothesis/
 
 # Python packaging and builds
 build/
@@ -33,12 +42,18 @@ eggs/
 *.egg
 pip-wheel-metadata/
 wheelhouse/
+MANIFEST
 
 # Virtual environments
 .venv/
 venv/
 env/
 ENV/
+.env/
+backend/venv/
+backend/.venv/
+ingestion/venv/
+ingestion/.venv/
 
 # Jupyter notebooks
 .ipynb_checkpoints/
@@ -53,8 +68,14 @@ qdrant_storage/
 chroma/
 chromadb/
 storage/
+data/
 tmp/
 temp/
+.tmp/
+.temp/
+uploads/
+downloads/
+*.pid
 
 # Logs
 logs/
@@ -70,9 +91,15 @@ node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
+frontend/.vite/
+frontend/.cache/
+frontend/coverage/
 coverage/
 *.tsbuildinfo
 .vite/
+.next/
+.nuxt/
+.svelte-kit/
 
 # Docker local overrides and volumes
 docker-compose.override.yml
@@ -81,8 +108,10 @@ docker-compose.*.override.yml
 
 # OS files
 .DS_Store
+._*
 Thumbs.db
 Desktop.ini
+ehthumbs.db
 
 # Editor and IDE files
 .idea/
@@ -98,3 +127,4 @@ Desktop.ini
 *.bak
 *.tmp
 *.orig
+*.rej

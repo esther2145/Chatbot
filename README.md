@@ -39,7 +39,7 @@ Langfuse monitoring.
 
 ### 2. Start Qdrant + the backend
     docker compose up --build
-The API is now at http://localhost:8000 (try http://localhost:8000/health).
+The API is now at http://localhost:8001 (try http://localhost:8001/health).
 
 ### 3. Load the NSSF content (one time, and whenever the site changes)
 Run the ingestion pipeline against the running Qdrant:

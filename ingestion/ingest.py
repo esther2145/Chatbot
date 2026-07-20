@@ -33,8 +33,14 @@ COLLECTION = os.environ.get("COLLECTION", "nssf")
 
 AZURE_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
 AZURE_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT")
+AZURE_EMBED_DEPLOYMENT = os.environ.get("AZURE_EMBED_DEPLOYMENT", AZURE_DEPLOYMENT)
 AZURE_API_KEY = os.environ.get("AZURE_OPENAI_API_KEY")
 AZURE_API_VERSION = os.environ.get("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
+
+# Optional separate embedding resource (endpoint + key). If provided, the
+# ingestion pipeline will call the embedding deployment on that resource.
+AZURE_EMBED_ENDPOINT = os.environ.get("AZURE_EMBED_ENDPOINT", "")
+AZURE_EMBED_API_KEY = os.environ.get("AZURE_EMBED_API_KEY", "")
 
 if AZURE_ENDPOINT:
     client = AzureOpenAI(
@@ -42,9 +48,30 @@ if AZURE_ENDPOINT:
         azure_endpoint=AZURE_ENDPOINT,
         api_key=AZURE_API_KEY,
     )
-    EMBED_MODEL = AZURE_DEPLOYMENT
 else:
-    raise RuntimeError("AZURE_ENDPOINT is not set. Add it to .env before running ingestion.")
+    client = None
+
+# embedding client: prefer explicit embed endpoint/key when provided
+if AZURE_EMBED_ENDPOINT:
+    embed_client = AzureOpenAI(
+        api_version=AZURE_API_VERSION,
+        azure_endpoint=AZURE_EMBED_ENDPOINT,
+        api_key=AZURE_EMBED_API_KEY,
+    )
+elif client is not None:
+    embed_client = client
+else:
+    raise RuntimeError(
+        "No Azure endpoint configured. Set AZURE_OPENAI_ENDPOINT or AZURE_EMBED_ENDPOINT in .env before running ingestion."
+    )
+
+# Use the embed deployment if provided, otherwise fall back to general
+EMBED_MODEL = AZURE_EMBED_DEPLOYMENT
+
+# Diagnostic info to help debug 404 deployment-not-found errors.
+print("[ingest] embed endpoint:", AZURE_EMBED_ENDPOINT or AZURE_ENDPOINT)
+print("[ingest] embed api key present:", bool(AZURE_EMBED_API_KEY or AZURE_API_KEY))
+print("[ingest] embed deployment:", EMBED_MODEL)
 
 SEED_URLS = [
     "https://www.nssfug.org/",
@@ -162,8 +189,18 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
     vectors = []
     for i in range(0, len(texts), 64):
         batch = texts[i : i + 64]
-        resp = client.embeddings.create(model=EMBED_MODEL, input=batch)
-        vectors.extend(d.embedding for d in resp.data)
+        try:
+            resp = embed_client.embeddings.create(model=EMBED_MODEL, input=batch)
+            vectors.extend(d.embedding for d in resp.data)
+        except Exception as exc:  # capture detailed info for debugging
+            print("[ingest] embedding request failed:", repr(exc))
+            # If the AzureOpenAI client surfaces a response body, print it.
+            try:
+                # some SDK errors include a 'response' attribute
+                print("[ingest] error details:", getattr(exc, 'response', None))
+            except Exception:
+                pass
+            raise
     return vectors
 
 

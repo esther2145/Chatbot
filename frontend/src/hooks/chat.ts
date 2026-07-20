@@ -4,7 +4,7 @@
 
 import { useRef, useState, useCallback } from "react";
 
-const API = "http://localhost:8000";
+const API = "http://localhost:8001";
 
 export type Message = {
   role: "user" | "assistant";

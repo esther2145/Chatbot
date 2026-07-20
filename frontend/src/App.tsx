@@ -14,7 +14,7 @@ import {
 import { speakText, startListening } from "./utils/speech";
 import "./App.css";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "http://127.0.0.1:8001";
 
 type Message = {
   sender: string;
@@ -158,6 +158,10 @@ function App() {
         }),
         signal: controller.signal,
       });
+
+      if (!response.ok) {
+        throw new Error(`Backend request failed with status ${response.status}`);
+      }
 
       const data = await response.json();
       if (controllerRef.current !== controller) return;

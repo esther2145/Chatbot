@@ -1,19 +1,45 @@
-"""
-Retrieval-augmented generation against the NSSF content, using Google Gemini
-through its OpenAI-compatible endpoint. Streams tokens as they are produced.
-"""
-from openai import OpenAI
+"""Retrieval-augmented generation against the indexed NSSF content."""
+import json
+
+from openai import AzureOpenAI, OpenAI
 from qdrant_client import QdrantClient
+from websockets.sync.client import connect
 
 from .config import settings
 
-# Same OpenAI SDK, just pointed at Gemini's compatible endpoint.
-_client = OpenAI(api_key=settings.openai_api_key, base_url=settings.AZURE_ENDPOINT)
+def _client(api_key: str, endpoint: str, api_version: str):
+    """Build a client with the correct URL format for Azure or OpenAI."""
+    if endpoint:
+        return AzureOpenAI(
+            api_key=api_key,
+            azure_endpoint=endpoint,
+            api_version=api_version,
+        )
+    return OpenAI(api_key=api_key or settings.openai_api_key)
+
+
+# Embeddings may live in a separate Azure resource. If not configured, use the
+# main Azure resource, but the model name must still be an actual deployment.
+embed_client = _client(
+    settings.azure_embed_api_key
+    or settings.azure_openai_api_key
+    or settings.openai_api_key,
+    settings.azure_embed_endpoint
+    or settings.azure_openai_endpoint
+    or settings.azure_endpoint,
+    settings.azure_embed_api_version,
+)
 _qdrant = QdrantClient(url=settings.qdrant_url)
 
 SYSTEM_PROMPT = (
     "You are Nicky, the NSSF Uganda assistant. You help people with questions "
     "about membership, benefits, contributions, claims and NSSF services.\n\n"
+    "Use simple language that anyone can understand.\n"
+    "Start with a direct answer before explaining details.\n"
+    "Use bullet points for procedures with multiple steps.\n"
+    "Do not say 'Great question'.\n"
+    "Keep answers below 150 words unless more detail is requested.\n"
+    "Use a professional but warm tone.\n"
     "Rules:\n"
     "1. Answer ONLY using the provided context from the NSSF website.\n"
     "2. If the context does not contain the answer, say you don't have that "
@@ -32,7 +58,8 @@ NO_ANSWER = (
 
 
 def _embed(text: str) -> list[float]:
-    resp = _client.embeddings.create(model=settings.embed_model, input=text)
+    model = settings.azure_embed_deployment or settings.embed_model
+    resp = embed_client.embeddings.create(model=model, input=text)
     return resp.data[0].embedding
 
 
@@ -64,6 +91,68 @@ def _build_messages(history: list[dict], query: str, context) -> list[dict]:
     return messages
 
 
+def _realtime_text_stream(messages: list[dict]):
+    """Generate text with the existing Azure Realtime deployment."""
+    endpoint = settings.azure_openai_endpoint or settings.azure_endpoint
+    api_key = settings.azure_openai_api_key or settings.openai_api_key
+    deployment = settings.azure_openai_deployment or settings.azure_chat_deployment
+    api_version = settings.azure_openai_api_version
+
+    if not endpoint or not api_key or not deployment:
+        raise RuntimeError("Azure Realtime endpoint, key, or deployment is missing")
+
+    ws_url = (
+        f"{endpoint.replace('https://', 'wss://').rstrip('/')}/openai/realtime"
+        f"?deployment={deployment}&api-version={api_version}"
+    )
+    headers = {
+        "api-key": api_key,
+        "OpenAI-Beta": "realtime=v1",
+    }
+
+    # Realtime accepts text conversation items. Add the system instructions,
+    # prior turns, retrieved context, and current question to the conversation.
+    with connect(ws_url, additional_headers=headers, open_timeout=15) as ws:
+        for message in messages:
+            content_type = "text" if message["role"] == "assistant" else "input_text"
+            ws.send(
+                json.dumps(
+                    {
+                        "type": "conversation.item.create",
+                        "item": {
+                            "type": "message",
+                            "role": message["role"],
+                            "content": [
+                                {"type": content_type, "text": message["content"]}
+                            ],
+                        },
+                    }
+                )
+            )
+
+        ws.send(
+            json.dumps(
+                {
+                    "type": "response.create",
+                    "response": {"modalities": ["text"], "temperature": 0.6},
+                }
+            )
+        )
+
+        while True:
+            event = json.loads(ws.recv(timeout=60))
+            event_type = event.get("type")
+            if event_type in {"response.text.delta", "response.output_text.delta"}:
+                delta = event.get("delta", "")
+                if delta:
+                    yield delta
+            elif event_type in {"response.done", "response.completed"}:
+                break
+            elif event_type == "error":
+                error = event.get("error", {})
+                raise RuntimeError(error.get("message", str(error)))
+
+
 def stream_answer(history: list[dict], query: str):
     context = retrieve(query)
 
@@ -73,16 +162,8 @@ def stream_answer(history: list[dict], query: str):
         return
 
     messages = _build_messages(history, query, context)
-    stream = _client.chat.completions.create(
-        model=settings.chat_model,
-        messages=messages,
-        stream=True,
-        temperature=0.2,
-    )
-    for chunk in stream:
-        delta = chunk.choices[0].delta.content
-        if delta:
-            yield {"type": "token", "content": delta}
+    for delta in _realtime_text_stream(messages):
+        yield {"type": "token", "content": delta}
 
     citations, seen = [], set()
     for c in context:
