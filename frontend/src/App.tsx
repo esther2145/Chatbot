@@ -1,15 +1,20 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  Mic,
-  Send,
-  Volume2,
-  CircleHelp,
-  Sparkles,
-  ShieldCheck,
-  Plus,
-  Trash2,
+  ArrowUp,
+  Check,
   Copy,
   Eraser,
+  Headphones,
+  Menu,
+  MessageSquareText,
+  Mic,
+  Plus,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  Volume2,
+  VolumeX,
+  X,
 } from "lucide-react";
 import { speakText, startListening } from "./utils/speech";
 import "./App.css";
@@ -33,21 +38,20 @@ type Conversation = {
 const popularQuestions = [
   "What is NSSF?",
   "How do I register for NSSF?",
-  "What are NSSF benefits?",
-  "How do I check my balance?",
+  "How can I check my balance?",
   "How do I submit a claim?",
 ];
 
 const GREETING: Message = {
   sender: "Nicky",
-  text: "Hello! I am Nicky, your NSSF Uganda assistant. Ask me about membership, benefits, contributions, claims, or NSSF services.",
+  text: "Hello! I’m Nicky, your NSSF Uganda digital assistant. I can help with membership, contributions, benefits, claims, and NSSF services.",
   type: "bot",
 };
 
 function newConversation(): Conversation {
   return {
     id: crypto.randomUUID(),
-    title: "New Chat",
+    title: "New conversation",
     messages: [GREETING],
     sessionId: null,
   };
@@ -61,27 +65,28 @@ function App() {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length) return parsed;
       } catch {
-        /* ignore corrupt data */
+        // Ignore invalid local data and start cleanly.
       }
     }
     return [newConversation()];
   });
-
-  const [activeId, setActiveId] = useState<string>(
+  const [activeId, setActiveId] = useState(
     () => localStorage.getItem("nssf_active_id") || ""
   );
-
   const [question, setQuestion] = useState("");
   const [voiceReplies, setVoiceReplies] = useState(true);
   const [listening, setListening] = useState(false);
   const [loading, setLoading] = useState(false);
   const [online, setOnline] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (!conversations.find((c) => c.id === activeId)) {
+    if (!conversations.find((conversation) => conversation.id === activeId)) {
       setActiveId(conversations[0].id);
     }
   }, [conversations, activeId]);
@@ -95,7 +100,8 @@ function App() {
   }, [activeId]);
 
   const activeConversation =
-    conversations.find((c) => c.id === activeId) || conversations[0];
+    conversations.find((conversation) => conversation.id === activeId) ||
+    conversations[0];
   const messages = activeConversation.messages;
 
   useEffect(() => {
@@ -113,34 +119,35 @@ function App() {
       }
     }
     checkBackend();
-    const interval = setInterval(checkBackend, 3000);
+    const interval = setInterval(checkBackend, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  function speak(answer: string) {
-    speakText(answer, voiceReplies);
-  }
-
-  function updateActive(updater: (c: Conversation) => Conversation) {
-    setConversations((prev) =>
-      prev.map((c) => (c.id === activeId ? updater(c) : c))
+  function updateActive(updater: (conversation: Conversation) => Conversation) {
+    setConversations((previous) =>
+      previous.map((conversation) =>
+        conversation.id === activeId ? updater(conversation) : conversation
+      )
     );
   }
 
   async function askQuestion(text?: string) {
     const cleanQuestion = (text ?? question).trim();
-    if (!cleanQuestion) return;
+    if (!cleanQuestion || loading) return;
 
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
     window.speechSynthesis?.cancel();
 
-    updateActive((c) => ({
-      ...c,
-      title: c.title === "New Chat" ? cleanQuestion.slice(0, 40) : c.title,
+    updateActive((conversation) => ({
+      ...conversation,
+      title:
+        conversation.title === "New conversation"
+          ? cleanQuestion.slice(0, 42)
+          : conversation.title,
       messages: [
-        ...c.messages,
+        ...conversation.messages,
         { sender: "You", text: cleanQuestion, type: "user" },
       ],
     }));
@@ -165,16 +172,15 @@ function App() {
 
       const data = await response.json();
       if (controllerRef.current !== controller) return;
-
       const answer = data.ok
         ? data.answer
         : data.error || "Sorry, I could not answer that question.";
 
-      updateActive((c) => ({
-        ...c,
-        sessionId: data.session_id ?? c.sessionId,
+      updateActive((conversation) => ({
+        ...conversation,
+        sessionId: data.session_id ?? conversation.sessionId,
         messages: [
-          ...c.messages,
+          ...conversation.messages,
           {
             sender: "Nicky",
             text: answer,
@@ -183,21 +189,18 @@ function App() {
           },
         ],
       }));
-
-      speak(answer);
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
-      if (controllerRef.current !== controller) return;
+      speakText(answer, voiceReplies);
+    } catch (error: any) {
+      if (error.name === "AbortError" || controllerRef.current !== controller) return;
       const errorMessage =
-        "I could not connect to the chatbot backend. Make sure the backend is running.";
-      updateActive((c) => ({
-        ...c,
+        "I couldn’t complete that request. Please check the backend and try again.";
+      updateActive((conversation) => ({
+        ...conversation,
         messages: [
-          ...c.messages,
+          ...conversation.messages,
           { sender: "Nicky", text: errorMessage, type: "bot" },
         ],
       }));
-      speak(errorMessage);
     } finally {
       if (controllerRef.current === controller) setLoading(false);
     }
@@ -205,298 +208,286 @@ function App() {
 
   function startVoiceInput() {
     startListening(
-      (spokenQuestion: string) => {
-        // Fill the input box with spoken text; user reviews then sends.
+      (spokenQuestion) => {
         setQuestion(spokenQuestion);
+        textareaRef.current?.focus();
       },
       () => setListening(true),
       () => setListening(false),
-      (errorMessage: string) => {
+      (message) => {
         setListening(false);
-        alert(errorMessage);
+        alert(message);
       }
     );
   }
 
   function startNewChat() {
-    const conv = newConversation();
-    setConversations((prev) => [conv, ...prev]);
-    setActiveId(conv.id);
+    const conversation = newConversation();
+    setConversations((previous) => [conversation, ...previous]);
+    setActiveId(conversation.id);
+    setSidebarOpen(false);
   }
 
   function deleteConversation(id: string) {
-    setConversations((prev) => {
-      const filtered = prev.filter((c) => c.id !== id);
-      if (filtered.length === 0) {
+    setConversations((previous) => {
+      const remaining = previous.filter((conversation) => conversation.id !== id);
+      if (!remaining.length) {
         const fresh = newConversation();
         setActiveId(fresh.id);
         return [fresh];
       }
-      if (id === activeId) setActiveId(filtered[0].id);
-      return filtered;
+      if (id === activeId) setActiveId(remaining[0].id);
+      return remaining;
     });
   }
 
   function clearCurrentChat() {
-    updateActive((c) => ({ ...c, messages: [GREETING], sessionId: null }));
+    updateActive((conversation) => ({
+      ...conversation,
+      title: "New conversation",
+      messages: [GREETING],
+      sessionId: null,
+    }));
   }
 
-  function copyText(text: string) {
-    navigator.clipboard.writeText(text);
+  async function copyText(text: string, index: number) {
+    await navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    window.setTimeout(() => setCopiedIndex(null), 1600);
   }
 
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <img className="logo" src="/images/nssf.png.png" alt="NSSF Uganda" />
+    <div className="app-shell">
+      {sidebarOpen && (
+        <button
+          className="sidebar-scrim"
+          aria-label="Close navigation"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-        <div className="sidebar-content">
-          <h1>NSSF Assistant</h1>
-
+      <aside className={`sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
+        <div className="brand-row">
+          <div className="brand-mark">
+            <img src="/images/nssf.png.png" alt="NSSF Uganda" />
+          </div>
+          <div className="brand-copy">
+            <strong>NSSF Uganda</strong>
+            <span>Digital Assistant</span>
+          </div>
           <button
-            onClick={startNewChat}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.12)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "transparent")
-            }
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              width: "100%",
-              padding: "10px",
-              marginTop: "10px",
-              borderRadius: "8px",
-              border: "1px solid rgba(255,255,255,0.3)",
-              background: "transparent",
-              color: "white",
-              cursor: "pointer",
-              transition: "background 0.15s ease",
-            }}
+            className="icon-button sidebar-close"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close navigation"
           >
-            <Plus size={18} /> New Chat
+            <X size={19} />
           </button>
+        </div>
 
-          <div style={{ marginTop: "12px", maxHeight: "240px", overflowY: "auto" }}>
-            {conversations.map((c) => (
-              <div
-                key={c.id}
-                onClick={() => setActiveId(c.id)}
-                onMouseEnter={(e) => {
-                  if (c.id !== activeId)
-                    e.currentTarget.style.background = "rgba(255,255,255,0.1)";
-                }}
-                onMouseLeave={(e) => {
-                  if (c.id !== activeId)
-                    e.currentTarget.style.background = "transparent";
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "6px",
-                  padding: "8px 10px",
-                  marginBottom: "4px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  transition: "background 0.15s ease",
-                  background:
-                    c.id === activeId ? "rgba(255,255,255,0.15)" : "transparent",
+        <button className="new-chat-button" onClick={startNewChat}>
+          <Plus size={18} />
+          New conversation
+        </button>
+
+        <div className="conversation-section">
+          <div className="section-label">Recent conversations</div>
+          <div className="conversation-list">
+            {conversations.map((conversation) => (
+              <button
+                key={conversation.id}
+                className={`conversation-item ${
+                  conversation.id === activeId ? "active" : ""
+                }`}
+                onClick={() => {
+                  setActiveId(conversation.id);
+                  setSidebarOpen(false);
                 }}
               >
+                <MessageSquareText size={17} />
+                <span>{conversation.title}</span>
                 <span
-                  style={{
-                    color: "white",
-                    fontSize: "0.85rem",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
+                  role="button"
+                  tabIndex={0}
+                  className="delete-chat"
+                  aria-label="Delete conversation"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    deleteConversation(conversation.id);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") deleteConversation(conversation.id);
                   }}
                 >
-                  {c.title}
+                  <Trash2 size={15} />
                 </span>
-                <Trash2
-                  size={15}
-                  color="rgba(255,255,255,0.7)"
-                  style={{ cursor: "pointer", transition: "color 0.15s ease" }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.color = "#ff6b6b")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.color = "rgba(255,255,255,0.7)")
-                  }
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteConversation(c.id);
-                  }}
-                />
-              </div>
+              </button>
             ))}
           </div>
         </div>
 
-        <div className="assistant-card">
-          <div className="avatar">N</div>
-          <div>
-            <strong>Nicky</strong>
-            <span>Online Assistant</span>
+        <div className="sidebar-bottom">
+          <div className="trust-note">
+            <ShieldCheck size={18} />
+            <span>Answers grounded in indexed NSSF Uganda information.</span>
           </div>
-        </div>
-
-        <div className="sidebar-footer">
-          <ShieldCheck size={18} />
-          <span>Answers based on NSSF Uganda website information.</span>
+          <div className="assistant-profile">
+            <div className="nicky-avatar">N</div>
+            <div>
+              <strong>Nicky</strong>
+              <span><i className="status-dot" /> Available</span>
+            </div>
+          </div>
         </div>
       </aside>
 
-      <main className="main-content">
-        <header className="top">
-          <div>
-            <h2>How can I help you today?</h2>
-            <p>Ask a question by typing or using your microphone.</p>
+      <main className="workspace">
+        <header className="workspace-header">
+          <div className="header-left">
+            <button
+              className="icon-button mobile-menu"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open navigation"
+            >
+              <Menu size={21} />
+            </button>
+            <div>
+              <div className="eyebrow">NSSF MEMBER SUPPORT</div>
+              <h1>How can I help you today?</h1>
+            </div>
           </div>
-
-          <button
-            className="voice-toggle"
-            onClick={() => setVoiceReplies((previous) => !previous)}
-          >
-            <Volume2 size={20} />
-            Voice replies: {voiceReplies ? "ON" : "OFF"}
-          </button>
+          <div className="header-actions">
+            <div className={`service-status ${online ? "is-online" : ""}`}>
+              <span />
+              {online ? "Service online" : "Connecting"}
+            </div>
+            <button
+              className={`voice-control ${voiceReplies ? "active" : ""}`}
+              onClick={() => setVoiceReplies((value) => !value)}
+              title="Toggle spoken answers"
+            >
+              {voiceReplies ? <Volume2 size={18} /> : <VolumeX size={18} />}
+              <span>Voice {voiceReplies ? "on" : "off"}</span>
+            </button>
+          </div>
         </header>
 
-        <section className="popular">
-          <h3>
-            <Sparkles size={22} />
-            Popular questions
-          </h3>
-
-          <div className="question-buttons">
-            {popularQuestions.map((item) => (
-              <button
-                key={item}
-                onClick={() => askQuestion(item)}
-                className="question-chip"
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="chat-card">
-          <div className="chat-header">
-            <div>
-              <CircleHelp size={25} />
-              <strong>Chat with Nicky</strong>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <button
-                onClick={clearCurrentChat}
-                title="Clear this chat"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  color: "#555",
-                  fontSize: "0.8rem",
-                }}
-              >
-                <Eraser size={16} /> Clear
-              </button>
-              <span className={online ? "online" : "offline"}>
-                {online ? "Online" : "Connecting..."}
-              </span>
-            </div>
-          </div>
-
-          <div className="messages">
-            {messages.map((message, index) => (
-              <div className={`message ${message.type}`} key={index}>
-                <strong>{message.sender}</strong>
-                <div className="message-text">
-                  <div>{message.text}</div>
+        <section className="chat-stage">
+          <div className="messages" aria-live="polite">
+            {messages.length === 1 && (
+              <div className="welcome-panel">
+                <div className="welcome-icon"><Sparkles size={22} /></div>
+                <h2>Your NSSF questions, clearly answered.</h2>
+                <p>
+                  Ask about registration, contributions, benefits, claims, or
+                  navigating NSSF services.
+                </p>
+                <div className="suggestion-grid">
+                  {popularQuestions.map((item) => (
+                    <button key={item} onClick={() => askQuestion(item)}>
+                      <span>{item}</span>
+                      <ArrowUp size={16} />
+                    </button>
+                  ))}
                 </div>
-
-                {message.type === "bot" &&
-                  message.citations &&
-                  message.citations.length > 0 && (
-                    <div style={{ marginTop: "8px", fontSize: "0.78rem" }}>
-                      <strong>Sources:</strong>
-                      <ul style={{ margin: "4px 0 0", paddingLeft: "18px" }}>
-                        {message.citations.map((url, i) => (
-                          <li key={i}>
-                            <a href={url} target="_blank" rel="noopener noreferrer">
-                              {url}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                {message.type === "bot" && (
-                  <button
-                    onClick={() => copyText(message.text)}
-                    title="Copy answer"
-                    style={{
-                      marginTop: "6px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      border: "none",
-                      background: "transparent",
-                      cursor: "pointer",
-                      color: "#777",
-                      fontSize: "0.75rem",
-                    }}
-                  >
-                    <Copy size={14} /> Copy
-                  </button>
-                )}
-              </div>
-            ))}
-
-            {loading && (
-              <div className="message bot">
-                <strong>Nicky</strong>
-                <p>Thinking...</p>
               </div>
             )}
 
+            {messages.map((message, index) => (
+              <article className={`message-row ${message.type}`} key={index}>
+                <div className={`message-avatar ${message.type}`}>
+                  {message.type === "bot" ? "N" : "You"}
+                </div>
+                <div className="message-content">
+                  <div className="message-meta">
+                    <strong>{message.sender}</strong>
+                    {message.type === "bot" && <span>NSSF Digital Assistant</span>}
+                  </div>
+                  <div className="message-text">{message.text}</div>
+
+                  {message.type === "bot" && message.citations?.length ? (
+                    <div className="citation-block">
+                      <span>Sources</span>
+                      <div>
+                        {message.citations.map((url, citationIndex) => (
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            key={`${url}-${citationIndex}`}
+                          >
+                            {new URL(url).hostname.replace("www.", "")}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {message.type === "bot" && (
+                    <button
+                      className="copy-button"
+                      onClick={() => copyText(message.text, index)}
+                    >
+                      {copiedIndex === index ? <Check size={15} /> : <Copy size={15} />}
+                      {copiedIndex === index ? "Copied" : "Copy"}
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))}
+
+            {loading && (
+              <article className="message-row bot">
+                <div className="message-avatar bot">N</div>
+                <div className="message-content">
+                  <div className="message-meta">
+                    <strong>Nicky</strong><span>Reviewing NSSF information</span>
+                  </div>
+                  <div className="thinking-dots"><i /><i /><i /></div>
+                </div>
+              </article>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="input-area">
-            <textarea
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  askQuestion();
-                }
-              }}
-              placeholder="Type your NSSF question here..."
-            />
-
-            <button
-              className={`mic-button ${listening ? "listening" : ""}`}
-              onClick={startVoiceInput}
-            >
-              <Mic size={25} />
-            </button>
-
-            <button className="send-button" onClick={() => askQuestion()}>
-              <Send size={23} />
-              Send
-            </button>
+          <div className="composer-wrap">
+            <div className={`composer ${listening ? "is-listening" : ""}`}>
+              <textarea
+                ref={textareaRef}
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    askQuestion();
+                  }
+                }}
+                placeholder="Message Nicky about NSSF…"
+                rows={1}
+                aria-label="Your NSSF question"
+              />
+              <div className="composer-actions">
+                <button
+                  className={`composer-icon ${listening ? "listening" : ""}`}
+                  onClick={startVoiceInput}
+                  aria-label="Speak your question"
+                  title="Speak your question"
+                >
+                  {listening ? <Headphones size={19} /> : <Mic size={19} />}
+                </button>
+                <button
+                  className="send-button"
+                  disabled={!question.trim() || loading}
+                  onClick={() => askQuestion()}
+                  aria-label="Send question"
+                >
+                  <ArrowUp size={19} />
+                </button>
+              </div>
+            </div>
+            <div className="composer-footer">
+              <span>Nicky can make mistakes. Confirm financial decisions with NSSF.</span>
+              <button onClick={clearCurrentChat}><Eraser size={14} /> Clear chat</button>
+            </div>
           </div>
         </section>
       </main>
