@@ -29,7 +29,10 @@ embed_client = _client(
     or settings.azure_endpoint,
     settings.azure_embed_api_version,
 )
-_qdrant = QdrantClient(url=settings.qdrant_url)
+_qdrant = QdrantClient(
+    url=settings.qdrant_url,
+    api_key=settings.qdrant_api_key or None,
+)
 
 SYSTEM_PROMPT = (
     "You are Nicky, the NSSF Uganda assistant. You help people with questions "

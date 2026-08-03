@@ -29,6 +29,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 #OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://localhost:6333")
+QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY", "")
 COLLECTION = os.environ.get("COLLECTION", "nssf")
 
 AZURE_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
@@ -100,7 +101,10 @@ SEED_URLS = [
     "https://www.nssfug.org/contactus/",
 ]
 
-qdrant = QdrantClient(url=QDRANT_URL)
+qdrant = QdrantClient(
+    url=QDRANT_URL,
+    api_key=QDRANT_API_KEY or None,
+)
 
 CURATED_DOCS = [
     {

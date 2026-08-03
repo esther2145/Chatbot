@@ -29,6 +29,7 @@ class Settings(BaseSettings):
 
     # Qdrant and retrieval settings
     qdrant_url: str = "http://qdrant:6333"
+    qdrant_api_key: str = ""
     collection: str = "nssf"
     score_threshold: float = 0.2
     top_k: int = 5
@@ -47,6 +48,13 @@ class Settings(BaseSettings):
     livekit_url: str = ""
     livekit_api_key: str = ""
     livekit_api_secret: str = ""
+
+    # Comma-separated browser origins. Use "*" for local development only.
+    cors_origins: str = "*"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
     def base_url(self) -> str:

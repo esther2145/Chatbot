@@ -74,12 +74,18 @@ def azure_realtime_model():
     )
 
 
-server = AgentServer(
-    # A local Windows workstation can briefly report 100% CPU while the SDK
-    # warms up, which causes LiveKit's default CPU-based load policy to reject
-    # every call. One warm process is enough for this single-user chatbot.
-    load_threshold=0.9,
-    num_idle_processes=1,
+is_livekit_cloud = bool(os.getenv("LIVEKIT_AGENT_DEPLOYMENT"))
+
+server = (
+    AgentServer()
+    if is_livekit_cloud
+    else AgentServer(
+        # A local Windows workstation can briefly report 100% CPU while the SDK
+        # warms up, which causes LiveKit's default CPU-based load policy to reject
+        # every call. One warm process is enough for this single-user chatbot.
+        load_threshold=0.9,
+        num_idle_processes=1,
+    )
 )
 
 
@@ -88,7 +94,8 @@ def active_call_load(agent_server: AgentServer) -> float:
     return min(len(agent_server.active_jobs) / 1.0, 1.0)
 
 
-server.load_fnc = active_call_load
+if not is_livekit_cloud:
+    server.load_fnc = active_call_load
 
 
 @server.rtc_session()
