@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
 
+    # LiveKit Cloud. The API secret is server-only and must never be exposed
+    # through a VITE_ variable or returned directly to the browser.
+    livekit_url: str = ""
+    livekit_api_key: str = ""
+    livekit_api_secret: str = ""
+
     @property
     def base_url(self) -> str:
         if self.azure_endpoint:

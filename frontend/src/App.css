@@ -81,6 +81,221 @@ button:focus-visible, textarea:focus-visible, a:focus-visible {
 .conversation-item:hover .delete-chat { opacity: .7; }
 .delete-chat:hover { opacity: 1 !important; color: #ffb6b6; background: rgba(255, 255, 255, .1); }
 
+.live-voice-launch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #c9d8ff;
+  border-radius: 12px;
+  background: #edf3ff;
+  color: #123d88;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.live-voice-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(8, 20, 46, .58);
+  backdrop-filter: blur(7px);
+}
+
+.live-voice-dialog {
+  position: relative;
+  width: min(440px, 100%);
+  padding: 42px 34px 34px;
+  border: 1px solid rgba(255, 255, 255, .7);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 26px 70px rgba(7, 25, 60, .28);
+  text-align: center;
+}
+
+.live-voice-dialog h2 {
+  margin: 18px 0 8px;
+  color: #102d61;
+}
+
+.live-voice-dialog p {
+  margin: 0 auto 24px;
+  max-width: 340px;
+  color: #60708b;
+  line-height: 1.55;
+}
+
+.live-voice-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #f0f3f8;
+  color: #40516e;
+  cursor: pointer;
+}
+
+.live-voice-orb,
+.live-voice-pulse {
+  display: grid;
+  width: 74px;
+  height: 74px;
+  margin: auto;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #1f63da, #113a84);
+  color: #fff;
+  box-shadow: 0 13px 30px rgba(27, 85, 183, .3);
+}
+
+.live-voice-pulse {
+  position: relative;
+}
+
+.live-voice-pulse span {
+  position: absolute;
+  inset: -9px;
+  border: 2px solid rgba(42, 106, 220, .25);
+  border-radius: 50%;
+  animation: livekit-pulse 1.8s ease-out infinite;
+}
+
+@keyframes livekit-pulse {
+  0% { transform: scale(.85); opacity: 1; }
+  100% { transform: scale(1.28); opacity: 0; }
+}
+
+.live-voice-primary,
+.live-voice-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.live-voice-primary {
+  background: #174fae;
+  color: #fff;
+}
+
+.live-voice-primary:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+.live-voice-controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.live-agent-state {
+  display: inline-flex;
+  margin: 0 auto 18px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: #eef3fb;
+  color: #46617f;
+  font-size: .82rem;
+  font-weight: 700;
+}
+
+.live-agent-state.state-speaking {
+  background: #e7f7ed;
+  color: #18703b;
+}
+
+.live-agent-state.state-thinking {
+  background: #fff4d7;
+  color: #815d08;
+}
+
+.live-transcript {
+  max-height: 230px;
+  margin: 0 0 20px;
+  padding: 12px;
+  overflow-y: auto;
+  border: 1px solid #e1e8f2;
+  border-radius: 14px;
+  background: #f8fafc;
+  text-align: left;
+}
+
+.live-transcript-line {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 9px;
+  color: #34445e;
+  font-size: .88rem;
+  line-height: 1.4;
+}
+
+.live-transcript-line.assistant {
+  background: #edf3ff;
+}
+
+.live-transcript-line strong {
+  color: #173d7c;
+}
+
+.live-transcript-empty {
+  padding: 16px 8px;
+  color: #8290a5;
+  text-align: center;
+  font-size: .88rem;
+}
+
+.live-voice-controls .lk-button {
+  background: #edf3ff;
+  color: #123d88;
+}
+
+.live-voice-controls .live-voice-hangup {
+  background: #ffebee;
+  color: #a52030;
+}
+
+.live-voice-error {
+  margin: -10px 0 18px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff0f1;
+  color: #a32334;
+  font-size: .9rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 720px) {
+  .live-voice-launch span {
+    display: none;
+  }
+
+  .live-voice-launch {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
 .sidebar-bottom { padding-top: 15px; border-top: 1px solid rgba(255, 255, 255, .12); }
 .trust-note { display: flex; gap: 9px; padding: 0 8px 17px; color: rgba(255, 255, 255, .58); font-size: 11px; line-height: 1.45; }
 .trust-note svg { flex: 0 0 auto; color: var(--nssf-lime); }

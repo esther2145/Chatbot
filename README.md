@@ -45,6 +45,38 @@ Langfuse monitoring.
     docker compose up --build
 The API is now at http://localhost:8001 (try http://localhost:8001/health).
 
+The LiveKit voice agent runs on the host by default. This avoids Docker
+Desktop's network bridge interrupting long-lived LiveKit WebSocket and WebRTC
+connections. To enable it, add all three LiveKit Cloud project values to
+`.env`:
+
+    LIVEKIT_URL=wss://your-project.livekit.cloud
+    LIVEKIT_API_KEY=your-livekit-api-key
+    LIVEKIT_API_SECRET=your-livekit-api-secret
+
+The API secret is server-only. Never add it to the React source or to a
+`VITE_` environment variable.
+
+Install the frontend dependencies and start the UI in another terminal:
+
+    cd frontend
+    npm install
+    npm run dev
+
+Open the Vite URL (normally http://localhost:5173) and choose **Live voice**.
+The browser requests a short-lived room token from FastAPI, then connects the
+microphone to the LiveKit agent. Nicky uses the existing `/api/ask` endpoint
+for grounded NSSF answers.
+
+Start the voice agent in a third PowerShell terminal:
+
+    .\run-voice-agent.ps1
+
+Keep that terminal open during voice calls. If you specifically want to run
+the agent inside Docker instead, use:
+
+    docker compose --profile docker-agent up --build
+
 ### 3. Load the NSSF content (one time, and whenever the site changes)
 Run the ingestion pipeline against the running Qdrant:
 

@@ -17,5 +17,16 @@ services:
     depends_on:
       - qdrant
 
+  voice-agent:
+    build: ./voice-agent
+    profiles:
+      - docker-agent
+    env_file:
+      - .env
+    environment:
+      - RAG_API_URL=http://backend:8001/api/ask
+    depends_on:
+      - backend
+
 volumes:
   qdrant_data:

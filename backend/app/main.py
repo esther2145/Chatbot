@@ -108,11 +108,13 @@
 
 import json
 import uuid
+from datetime import timedelta
 from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from livekit import api as livekit_api
 from pydantic import BaseModel
 
 from . import rag
@@ -159,6 +161,52 @@ async def realtime_session():
         return result
     except Exception as exc:  # pragma: no cover - defensive runtime path
         return JSONResponse(status_code=502, content={"error": str(exc)})
+
+
+@app.post("/livekit/token")
+def livekit_token():
+    """Create a short-lived, room-scoped token for one browser participant."""
+    if not (
+        settings.livekit_url
+        and settings.livekit_api_key
+        and settings.livekit_api_secret
+    ):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": (
+                    "LiveKit is not configured. Set LIVEKIT_URL, "
+                    "LIVEKIT_API_KEY, and LIVEKIT_API_SECRET."
+                )
+            },
+        )
+
+    room_name = f"nssf-{uuid.uuid4().hex}"
+    identity = f"web-{uuid.uuid4().hex}"
+    token = (
+        livekit_api.AccessToken(
+            settings.livekit_api_key,
+            settings.livekit_api_secret,
+        )
+        .with_identity(identity)
+        .with_name("NSSF member")
+        .with_ttl(timedelta(minutes=15))
+        .with_grants(
+            livekit_api.VideoGrants(
+                room_join=True,
+                room=room_name,
+                can_publish=True,
+                can_subscribe=True,
+            )
+        )
+        .to_jwt()
+    )
+
+    return {
+        "serverUrl": settings.livekit_url,
+        "participantToken": token,
+        "roomName": room_name,
+    }
 
 
 @app.post("/api/ask")

@@ -17,6 +17,10 @@ import {
   X,
 } from "lucide-react";
 import { speakText, startListening } from "./utils/speech";
+import {
+  LiveVoice,
+  type CallTranscriptMessage,
+} from "./components/LiveVoice";
 import "./App.css";
 
 const API_BASE = "http://127.0.0.1:8001";
@@ -80,6 +84,7 @@ function App() {
   const [online, setOnline] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [liveVoiceOpen, setLiveVoiceOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -256,8 +261,34 @@ function App() {
     window.setTimeout(() => setCopiedIndex(null), 1600);
   }
 
+  function saveCallTranscript(callMessages: CallTranscriptMessage[]) {
+    if (!callMessages.length) return;
+    updateActive((conversation) => ({
+      ...conversation,
+      title:
+        conversation.title === "New conversation"
+          ? "Live voice conversation"
+          : conversation.title,
+      messages: [
+        ...conversation.messages,
+        ...callMessages.map<Message>((message) => ({
+          sender: message.role === "assistant" ? "Nicky" : "You",
+          text: message.text,
+          type: message.role === "assistant" ? "bot" : "user",
+        })),
+      ],
+    }));
+  }
+
   return (
     <div className="app-shell">
+      {liveVoiceOpen && (
+        <LiveVoice
+          apiBase={API_BASE}
+          onClose={() => setLiveVoiceOpen(false)}
+          onCallComplete={saveCallTranscript}
+        />
+      )}
       {sidebarOpen && (
         <button
           className="sidebar-scrim"
@@ -360,6 +391,14 @@ function App() {
               <span />
               {online ? "Service online" : "Connecting"}
             </div>
+            <button
+              className="live-voice-launch"
+              onClick={() => setLiveVoiceOpen(true)}
+              title="Start a LiveKit voice conversation"
+            >
+              <Headphones size={18} />
+              <span>Live voice</span>
+            </button>
             <button
               className={`voice-control ${voiceReplies ? "active" : ""}`}
               onClick={() => setVoiceReplies((value) => !value)}
