@@ -38,7 +38,7 @@ COLLECTION=nssf
 Create a temporary ingestion environment and upload the NSSF data:
 
 ```powershell
-python -m venv ingestion-venv
+py -3.11 -m venv ingestion-venv
 .\ingestion-venv\Scripts\python.exe -m pip install -r .\ingestion\requirements.txt
 .\ingestion-venv\Scripts\python.exe -m playwright install chromium
 .\ingestion-venv\Scripts\python.exe .\ingestion\ingest.py

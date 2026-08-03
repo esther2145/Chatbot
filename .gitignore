@@ -47,6 +47,7 @@ MANIFEST
 # Virtual environments
 .venv/
 venv/
+ingestion-venv/
 env/
 ENV/
 .env/

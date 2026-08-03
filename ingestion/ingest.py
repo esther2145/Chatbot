@@ -18,7 +18,6 @@ import re
 import uuid
 from pathlib import Path
 
-from azure.core.credentials import AzureKeyCredential
 from dotenv import load_dotenv
 from openai import AzureOpenAI
 from playwright.sync_api import sync_playwright
