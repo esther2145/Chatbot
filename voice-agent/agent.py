@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import Agent, AgentServer, AgentSession, RunContext, function_tool
 from livekit.plugins import openai
+from openai.types import realtime as openai_realtime
 
 
 load_dotenv()
@@ -18,6 +19,11 @@ class NssfAssistant(Agent):
             instructions=(
                 "You are Nicky, the NSSF Uganda voice assistant. Be friendly, "
                 "clear, and concise because your answers are spoken aloud. "
+                "Always listen, transcribe, reason, and reply in English. "
+                "Never translate the user's words into another language or "
+                "switch languages unless the user explicitly asks you to. "
+                "Use one consistent neutral English voice and accent for the "
+                "entire call. Do not imitate the user's accent. "
                 "For every question about NSSF, membership, contributions, "
                 "benefits, claims, balances, or services, you must call "
                 "search_nssf before answering. Treat its result as the source "
@@ -70,7 +76,17 @@ def azure_realtime_model():
         azure_endpoint=endpoint,
         api_key=os.getenv("AZURE_OPENAI_API_KEY", ""),
         voice=os.getenv("LIVEKIT_AGENT_VOICE", "coral"),
-        speed=float(os.getenv("LIVEKIT_AGENT_VOICE_SPEED", "1.05")),
+        speed=float(os.getenv("LIVEKIT_AGENT_VOICE_SPEED", "1.0")),
+        input_audio_transcription=openai_realtime.AudioTranscription(
+            model="gpt-4o-transcribe",
+            language="en",
+            prompt=(
+                "The speaker is using English and discussing NSSF Uganda, "
+                "membership, contributions, balances, benefits, and claims. "
+                "Transcribe the spoken English verbatim; do not translate it."
+            ),
+        ),
+        input_audio_noise_reduction="near_field",
     )
 
 
@@ -105,7 +121,8 @@ async def nssf_voice_agent(ctx: agents.JobContext):
     await session.generate_reply(
         instructions=(
             "Greet the user briefly as Nicky and invite them to ask an NSSF "
-            "question. Start in English."
+            "question. Speak only in English with the same voice and accent "
+            "for the complete response."
         )
     )
 
