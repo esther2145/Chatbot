@@ -1,5 +1,8 @@
 # NSSF Assistant (Nicky) — Backend
 
+For complete local setup, cloud reproduction, voice deployment, verification,
+and troubleshooting, see [DEVELOPER_HANDOFF.md](DEVELOPER_HANDOFF.md).
+
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete architecture,
 component responsibilities, data flows, API reference, configuration,
 deployment model, troubleshooting, and production considerations.
