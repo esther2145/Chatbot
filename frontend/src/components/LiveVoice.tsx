@@ -40,8 +40,8 @@ export function LiveVoice({
   function finishCall() {
     if (transcriptRef.current.length) {
       onCallComplete(transcriptRef.current);
-      transcriptRef.current = [];
     }
+    transcriptRef.current = [];
     setCredentials(null);
   }
 
@@ -109,6 +109,7 @@ export function LiveVoice({
           </>
         ) : (
           <LiveKitRoom
+            key={credentials.roomName}
             serverUrl={credentials.serverUrl}
             token={credentials.participantToken}
             connect

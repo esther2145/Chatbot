@@ -87,6 +87,7 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [liveVoiceOpen, setLiveVoiceOpen] = useState(false);
+  const [liveVoiceInstanceId, setLiveVoiceInstanceId] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -265,11 +266,23 @@ function App() {
 
   function saveCallTranscript(callMessages: CallTranscriptMessage[]) {
     if (!callMessages.length) return;
+    const firstUserMessage = callMessages.find(
+      (message) => message.role === "user" && message.text.trim()
+    );
+    const transcriptTitle = (
+      firstUserMessage?.text ||
+      callMessages.find((message) => message.text.trim())?.text ||
+      "Voice conversation"
+    )
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 42);
+
     updateActive((conversation) => ({
       ...conversation,
       title:
         conversation.title === "New conversation"
-          ? "Live voice conversation"
+          ? transcriptTitle
           : conversation.title,
       messages: [
         ...conversation.messages,
@@ -286,6 +299,7 @@ function App() {
     <div className="app-shell">
       {liveVoiceOpen && (
         <LiveVoice
+          key={liveVoiceInstanceId}
           apiBase={API_BASE}
           onClose={() => setLiveVoiceOpen(false)}
           onCallComplete={saveCallTranscript}
@@ -395,7 +409,10 @@ function App() {
             </div>
             <button
               className="live-voice-launch"
-              onClick={() => setLiveVoiceOpen(true)}
+              onClick={() => {
+                setLiveVoiceInstanceId(crypto.randomUUID());
+                setLiveVoiceOpen(true);
+              }}
               title="Start a LiveKit voice conversation"
             >
               <Headphones size={18} />
