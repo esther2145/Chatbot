@@ -14,12 +14,14 @@ type Credentials = {
   serverUrl: string;
   participantToken: string;
   roomName: string;
+  sessionId: string;
 };
 
 type LiveVoiceProps = {
   apiBase: string;
+  conversationSessionId: string | null;
   onClose: () => void;
-  onCallComplete: (messages: CallTranscriptMessage[]) => void;
+  onCallComplete: (messages: CallTranscriptMessage[], sessionId: string) => void;
 };
 
 export type CallTranscriptMessage = {
@@ -29,6 +31,7 @@ export type CallTranscriptMessage = {
 
 export function LiveVoice({
   apiBase,
+  conversationSessionId,
   onClose,
   onCallComplete,
 }: LiveVoiceProps) {
@@ -39,7 +42,7 @@ export function LiveVoice({
 
   function finishCall() {
     if (transcriptRef.current.length) {
-      onCallComplete(transcriptRef.current);
+      onCallComplete(transcriptRef.current, credentials?.sessionId || "");
     }
     transcriptRef.current = [];
     setCredentials(null);
@@ -56,6 +59,8 @@ export function LiveVoice({
     try {
       const response = await fetch(`${apiBase}/livekit/token`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: conversationSessionId }),
       });
       const data = await response.json();
       if (!response.ok) {

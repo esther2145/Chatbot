@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     # Session memory
     max_turns: int = 8
     session_ttl_seconds: int = 3600
+    database_url: str = ""
 
     # Optional monitoring
     langfuse_public_key: str = ""

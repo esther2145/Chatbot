@@ -59,7 +59,7 @@ function newConversation(): Conversation {
     id: crypto.randomUUID(),
     title: "New conversation",
     messages: [GREETING],
-    sessionId: null,
+    sessionId: crypto.randomUUID(),
   };
 }
 
@@ -264,7 +264,10 @@ function App() {
     window.setTimeout(() => setCopiedIndex(null), 1600);
   }
 
-  function saveCallTranscript(callMessages: CallTranscriptMessage[]) {
+  function saveCallTranscript(
+    callMessages: CallTranscriptMessage[],
+    voiceSessionId: string
+  ) {
     if (!callMessages.length) return;
     const firstUserMessage = callMessages.find(
       (message) => message.role === "user" && message.text.trim()
@@ -280,6 +283,7 @@ function App() {
 
     updateActive((conversation) => ({
       ...conversation,
+      sessionId: voiceSessionId || conversation.sessionId,
       title:
         conversation.title === "New conversation"
           ? transcriptTitle
@@ -301,6 +305,7 @@ function App() {
         <LiveVoice
           key={liveVoiceInstanceId}
           apiBase={API_BASE}
+          conversationSessionId={activeConversation.sessionId}
           onClose={() => setLiveVoiceOpen(false)}
           onCallComplete={saveCallTranscript}
         />

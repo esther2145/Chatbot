@@ -119,10 +119,10 @@ from pydantic import BaseModel
 
 from . import rag
 from .config import settings
-from .memory import SessionMemory
 from .monitoring import trace_chat, trace_feedback
 from .realtime import connect_realtime_session
 from .schemas import ChatRequest, FeedbackRequest, HistoryResponse
+from .storage import ConversationStore
 
 app = FastAPI(title="NSSF Assistant API")
 
@@ -133,7 +133,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-memory = SessionMemory(
+memory = ConversationStore(
+    database_url=settings.database_url,
     max_turns=settings.max_turns,
     ttl_seconds=settings.session_ttl_seconds,
 )
@@ -144,6 +145,10 @@ class AskRequest(BaseModel):
     session_id: Optional[str] = None
 
 
+class LiveKitTokenRequest(BaseModel):
+    session_id: Optional[uuid.UUID] = None
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -151,7 +156,7 @@ def health():
 
 @app.get("/api/status")
 def api_status():
-    return {"ready": True}
+    return {"ready": True, "persistent_history": memory.persistent}
 
 
 @app.post("/realtime/session")
@@ -164,7 +169,7 @@ async def realtime_session():
 
 
 @app.post("/livekit/token")
-def livekit_token():
+def livekit_token(req: LiveKitTokenRequest = LiveKitTokenRequest()):
     """Create a short-lived, room-scoped token for one browser participant."""
     if not (
         settings.livekit_url
@@ -181,7 +186,8 @@ def livekit_token():
             },
         )
 
-    room_name = f"nssf-{uuid.uuid4().hex}"
+    session_id = str(req.session_id or uuid.uuid4())
+    room_name = f"nssf__{session_id}__{uuid.uuid4().hex[:10]}"
     identity = f"web-{uuid.uuid4().hex}"
     token = (
         livekit_api.AccessToken(
@@ -206,6 +212,7 @@ def livekit_token():
         "serverUrl": settings.livekit_url,
         "participantToken": token,
         "roomName": room_name,
+        "sessionId": session_id,
     }
 
 
@@ -269,5 +276,6 @@ def get_history(session_id: str):
 
 @app.post("/feedback")
 def feedback(req: FeedbackRequest):
+    memory.add_feedback(req.session_id, req.message, req.rating)
     trace_feedback(req.session_id, req.message, req.rating)
     return {"status": "recorded"}

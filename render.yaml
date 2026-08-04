@@ -15,6 +15,8 @@ services:
         sync: false
       - key: COLLECTION
         value: nssf
+      - key: DATABASE_URL
+        sync: false
       - key: CORS_ORIGINS
         value: https://nicky-nssf-chatbot.onrender.com
       - key: AZURE_OPENAI_ENDPOINT

@@ -16,12 +16,17 @@ from threading import Lock
 class SessionMemory:
     def __init__(self, max_turns: int = 8, ttl_seconds: int = 3600):
         # maxlen = max_turns * 2 because each turn is a user + assistant message
+        self._max_messages = max_turns * 2
         self._store: dict[str, deque] = defaultdict(
-            lambda: deque(maxlen=max_turns * 2)
+            lambda: deque(maxlen=self._max_messages)
         )
         self._last_seen: dict[str, float] = {}
         self._lock = Lock()
         self._ttl = ttl_seconds
+
+    @property
+    def max_messages(self) -> int:
+        return self._max_messages
 
     def add(self, session_id: str, role: str, content: str) -> None:
         with self._lock:

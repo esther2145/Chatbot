@@ -1,4 +1,5 @@
 import os
+import uuid
 
 import httpx
 from dotenv import load_dotenv
@@ -14,7 +15,8 @@ RAG_API_URL = os.getenv("RAG_API_URL", "http://backend:8001/api/ask")
 
 
 class NssfAssistant(Agent):
-    def __init__(self) -> None:
+    def __init__(self, session_id: str) -> None:
+        self.session_id = session_id
         super().__init__(
             instructions=(
                 "You are Nicky, the NSSF Uganda voice assistant. Be friendly, "
@@ -57,7 +59,7 @@ class NssfAssistant(Agent):
             async with httpx.AsyncClient(timeout=40) as client:
                 response = await client.post(
                     RAG_API_URL,
-                    json={"question": question},
+                    json={"question": question, "session_id": self.session_id},
                 )
                 response.raise_for_status()
                 payload = response.json()
@@ -115,8 +117,10 @@ if not is_livekit_cloud:
 
 @server.rtc_session()
 async def nssf_voice_agent(ctx: agents.JobContext):
+    room_parts = ctx.room.name.split("__")
+    session_id = room_parts[1] if len(room_parts) == 3 else str(uuid.uuid4())
     session = AgentSession(llm=azure_realtime_model())
-    await session.start(room=ctx.room, agent=NssfAssistant())
+    await session.start(room=ctx.room, agent=NssfAssistant(session_id))
     await session.generate_reply(
         instructions=(
             "Greet the user briefly as Nicky and invite them to ask an NSSF "
