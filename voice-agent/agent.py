@@ -78,13 +78,9 @@ def azure_realtime_model():
         voice=os.getenv("LIVEKIT_AGENT_VOICE", "coral"),
         speed=float(os.getenv("LIVEKIT_AGENT_VOICE_SPEED", "1.0")),
         input_audio_transcription=openai_realtime.AudioTranscription(
-            model="gpt-4o-transcribe",
+            model="whisper-1",
             language="en",
-            prompt=(
-                "The speaker is using English and discussing NSSF Uganda, "
-                "membership, contributions, balances, benefits, and claims. "
-                "Transcribe the spoken English verbatim; do not translate it."
-            ),
+            prompt="NSSF Uganda, membership, contributions, balances, benefits, claims",
         ),
         input_audio_noise_reduction="near_field",
     )
