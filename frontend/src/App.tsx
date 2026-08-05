@@ -11,6 +11,7 @@ import {
   Plus,
   ShieldCheck,
   Sparkles,
+  Square,
   Trash2,
   Volume2,
   VolumeX,
@@ -212,6 +213,12 @@ function App() {
     } finally {
       if (controllerRef.current === controller) setLoading(false);
     }
+  }
+
+  function stopGenerating() {
+    controllerRef.current?.abort();
+    controllerRef.current = null;
+    setLoading(false);
   }
 
   function startVoiceInput() {
@@ -538,12 +545,19 @@ function App() {
                   {listening ? <Headphones size={19} /> : <Mic size={19} />}
                 </button>
                 <button
-                  className="send-button"
-                  disabled={!question.trim() || loading}
-                  onClick={() => askQuestion()}
-                  aria-label="Send question"
+                  className={`send-button ${loading ? "stop" : ""}`}
+                  disabled={!loading && !question.trim()}
+                  onClick={() => {
+                    if (loading) {
+                      stopGenerating();
+                    } else {
+                      askQuestion();
+                    }
+                  }}
+                  aria-label={loading ? "Stop generating" : "Send question"}
+                  title={loading ? "Stop generating" : "Send question"}
                 >
-                  <ArrowUp size={19} />
+                  {loading ? <Square size={17} /> : <ArrowUp size={19} />}
                 </button>
               </div>
             </div>
