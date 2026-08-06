@@ -110,6 +110,29 @@ Copy `frontend-snippet/useChat.ts` into your React app and use it:
 - **Feedback** — POST /feedback with up/down logs to Langfuse.
 - **Monitoring** — optional Langfuse tracing of every request.
 
+## Enable Langfuse monitoring
+
+1. Create a free Langfuse Cloud account and project at
+   https://cloud.langfuse.com.
+2. Open **Project Settings > API Keys** and create or copy the project keys.
+3. Add these server-side values to `.env` for local use, or to the backend
+   service's **Environment** page in Render:
+
+       LANGFUSE_PUBLIC_KEY=pk-lf-...
+       LANGFUSE_SECRET_KEY=sk-lf-...
+       LANGFUSE_BASE_URL=https://cloud.langfuse.com
+       LANGFUSE_ENVIRONMENT=production
+
+   Use `https://us.cloud.langfuse.com` or another regional URL if that is
+   where the Langfuse project was created. Never put the secret key in a
+   `VITE_` variable or frontend code.
+4. Restart or redeploy the backend. Check `/api/status`; `monitoring` should
+   be `true`. Send a test message, then open **Tracing > Traces** in Langfuse.
+
+Each completed turn records its text/voice channel, latency, answer length,
+citations, and conversation session. If the keys are absent or Langfuse is
+temporarily unavailable, chat continues normally.
+
 ## Endpoints
 
 | Method | Path                       | Purpose                          |

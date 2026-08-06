@@ -42,7 +42,8 @@ class Settings(BaseSettings):
     # Optional monitoring
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
-    langfuse_host: str = "https://cloud.langfuse.com"
+    langfuse_base_url: str = "https://cloud.langfuse.com"
+    langfuse_environment: str = "production"
 
     # LiveKit Cloud. The API secret is server-only and must never be exposed
     # through a VITE_ variable or returned directly to the browser.

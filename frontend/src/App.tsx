@@ -11,12 +11,11 @@ import {
   Plus,
   ShieldCheck,
   Sparkles,
+  Square,
   Trash2,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
-import { speakText, startListening } from "./utils/speech";
+import { startListening } from "./utils/speech";
 import {
   LiveVoice,
   type CallTranscriptMessage,
@@ -80,7 +79,6 @@ function App() {
     () => localStorage.getItem("nssf_active_id") || ""
   );
   const [question, setQuestion] = useState("");
-  const [voiceReplies, setVoiceReplies] = useState(true);
   const [listening, setListening] = useState(false);
   const [loading, setLoading] = useState(false);
   const [online, setOnline] = useState(false);
@@ -197,7 +195,6 @@ function App() {
           },
         ],
       }));
-      speakText(answer, voiceReplies);
     } catch (error: any) {
       if (error.name === "AbortError" || controllerRef.current !== controller) return;
       const errorMessage =
@@ -212,6 +209,12 @@ function App() {
     } finally {
       if (controllerRef.current === controller) setLoading(false);
     }
+  }
+
+  function stopGenerating() {
+    controllerRef.current?.abort();
+    controllerRef.current = null;
+    setLoading(false);
   }
 
   function startVoiceInput() {
@@ -412,25 +415,6 @@ function App() {
               <span />
               {online ? "Service online" : "Connecting"}
             </div>
-            <button
-              className="live-voice-launch"
-              onClick={() => {
-                setLiveVoiceInstanceId(crypto.randomUUID());
-                setLiveVoiceOpen(true);
-              }}
-              title="Start a LiveKit voice conversation"
-            >
-              <Headphones size={18} />
-              <span>Live voice</span>
-            </button>
-            <button
-              className={`voice-control ${voiceReplies ? "active" : ""}`}
-              onClick={() => setVoiceReplies((value) => !value)}
-              title="Toggle spoken answers"
-            >
-              {voiceReplies ? <Volume2 size={18} /> : <VolumeX size={18} />}
-              <span>Voice {voiceReplies ? "on" : "off"}</span>
-            </button>
           </div>
         </header>
 
@@ -530,6 +514,18 @@ function App() {
               />
               <div className="composer-actions">
                 <button
+                  className="live-voice-launch"
+                  onClick={() => {
+                    setLiveVoiceInstanceId(crypto.randomUUID());
+                    setLiveVoiceOpen(true);
+                  }}
+                  aria-label="Start live voice call"
+                  title="Start a LiveKit voice conversation"
+                >
+                  <Headphones size={18} />
+                  <span>Live voice</span>
+                </button>
+                <button
                   className={`composer-icon ${listening ? "listening" : ""}`}
                   onClick={startVoiceInput}
                   aria-label="Speak your question"
@@ -538,12 +534,19 @@ function App() {
                   {listening ? <Headphones size={19} /> : <Mic size={19} />}
                 </button>
                 <button
-                  className="send-button"
-                  disabled={!question.trim() || loading}
-                  onClick={() => askQuestion()}
-                  aria-label="Send question"
+                  className={`send-button ${loading ? "stop" : ""}`}
+                  disabled={!loading && !question.trim()}
+                  onClick={() => {
+                    if (loading) {
+                      stopGenerating();
+                    } else {
+                      askQuestion();
+                    }
+                  }}
+                  aria-label={loading ? "Stop generating" : "Send question"}
+                  title={loading ? "Stop generating" : "Send question"}
                 >
-                  <ArrowUp size={19} />
+                  {loading ? <Square size={17} /> : <ArrowUp size={19} />}
                 </button>
               </div>
             </div>
