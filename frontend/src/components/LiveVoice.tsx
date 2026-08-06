@@ -3,12 +3,11 @@ import {
   LiveKitRoom,
   RoomAudioRenderer,
   TrackToggle,
-  useRoomContext,
   useTranscriptions,
   useVoiceAssistant,
 } from "@livekit/components-react";
 import { Track } from "livekit-client";
-import { Headphones, Mic, PhoneOff, Square, X } from "lucide-react";
+import { Headphones, Mic, PhoneOff, X } from "lucide-react";
 import "@livekit/components-styles";
 
 type Credentials = {
@@ -149,26 +148,6 @@ function ActiveVoiceCall({
 }) {
   const transcriptions = useTranscriptions();
   const { agent, state } = useVoiceAssistant();
-  const room = useRoomContext();
-  const [stopping, setStopping] = useState(false);
-  const [interruptError, setInterruptError] = useState("");
-
-  async function stopAgentSpeaking() {
-    if (!agent?.identity || stopping) return;
-    setStopping(true);
-    setInterruptError("");
-    try {
-      await room.localParticipant.performRpc({
-        destinationIdentity: agent.identity,
-        method: "interrupt_agent",
-        payload: "",
-      });
-    } catch {
-      setInterruptError("Nicky could not be stopped. Please try again.");
-    } finally {
-      setStopping(false);
-    }
-  }
 
   const messages = useMemo<CallTranscriptMessage[]>(
     () =>
@@ -208,9 +187,6 @@ function ActiveVoiceCall({
         {stateLabel[state] || state}
       </div>
       {error && <div className="live-voice-error">{error}</div>}
-      {interruptError && (
-        <div className="live-voice-error">{interruptError}</div>
-      )}
 
       <div className="live-transcript" aria-live="polite">
         {messages.length ? (
@@ -228,16 +204,6 @@ function ActiveVoiceCall({
       </div>
 
       <div className="live-voice-controls">
-        {(state === "speaking" || state === "thinking") && (
-          <button
-            className="live-voice-stop-speaking"
-            onClick={stopAgentSpeaking}
-            disabled={stopping || !agent?.identity}
-          >
-            <Square size={16} />
-            {stopping ? "Stopping…" : "Stop speaking"}
-          </button>
-        )}
         <TrackToggle source={Track.Source.Microphone}>
           <Mic size={18} />
           Microphone

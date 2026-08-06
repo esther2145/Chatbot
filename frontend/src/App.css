@@ -274,20 +274,6 @@ button:focus-visible, textarea:focus-visible, a:focus-visible {
   color: #a52030;
 }
 
-.live-voice-controls .live-voice-stop-speaking {
-  background: #fff0f1;
-  color: #a32334;
-}
-
-.live-voice-controls .live-voice-stop-speaking:hover:not(:disabled) {
-  background: #ffdfe2;
-}
-
-.live-voice-controls .live-voice-stop-speaking:disabled {
-  cursor: wait;
-  opacity: .65;
-}
-
 .live-voice-error {
   margin: -10px 0 18px;
   padding: 10px 12px;
