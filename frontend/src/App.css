@@ -373,7 +373,9 @@ button:focus-visible, textarea:focus-visible, a:focus-visible {
 .composer.is-listening { border-color: #d46c6c; }
 .composer textarea { flex: 1; max-height: 130px; min-height: 42px; padding: 11px 0 7px; resize: none; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 14px; line-height: 1.5; }
 .composer textarea::placeholder { color: #98a39c; }
-.composer-actions { display: flex; align-items: center; gap: 7px; }
+.composer-actions { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+.composer-actions .live-voice-launch,
+.composer-actions .voice-control { height: 42px; }
 .composer-icon, .send-button { width: 42px; height: 42px; display: grid; place-items: center; border: 0; border-radius: 12px; }
 .composer-icon { color: #64736a; background: #f1f5f2; }
 .composer-icon:hover { color: var(--nssf-blue); background: #e8f3fa; }

@@ -419,25 +419,6 @@ function App() {
               <span />
               {online ? "Service online" : "Connecting"}
             </div>
-            <button
-              className="live-voice-launch"
-              onClick={() => {
-                setLiveVoiceInstanceId(crypto.randomUUID());
-                setLiveVoiceOpen(true);
-              }}
-              title="Start a LiveKit voice conversation"
-            >
-              <Headphones size={18} />
-              <span>Live voice</span>
-            </button>
-            <button
-              className={`voice-control ${voiceReplies ? "active" : ""}`}
-              onClick={() => setVoiceReplies((value) => !value)}
-              title="Toggle spoken answers"
-            >
-              {voiceReplies ? <Volume2 size={18} /> : <VolumeX size={18} />}
-              <span>Voice {voiceReplies ? "on" : "off"}</span>
-            </button>
           </div>
         </header>
 
@@ -536,6 +517,27 @@ function App() {
                 aria-label="Your NSSF question"
               />
               <div className="composer-actions">
+                <button
+                  className="live-voice-launch"
+                  onClick={() => {
+                    setLiveVoiceInstanceId(crypto.randomUUID());
+                    setLiveVoiceOpen(true);
+                  }}
+                  aria-label="Start live voice call"
+                  title="Start a LiveKit voice conversation"
+                >
+                  <Headphones size={18} />
+                  <span>Live voice</span>
+                </button>
+                <button
+                  className={`voice-control ${voiceReplies ? "active" : ""}`}
+                  onClick={() => setVoiceReplies((value) => !value)}
+                  aria-label={`Turn spoken answers ${voiceReplies ? "off" : "on"}`}
+                  title="Toggle spoken answers"
+                >
+                  {voiceReplies ? <Volume2 size={18} /> : <VolumeX size={18} />}
+                  <span>Voice {voiceReplies ? "on" : "off"}</span>
+                </button>
                 <button
                   className={`composer-icon ${listening ? "listening" : ""}`}
                   onClick={startVoiceInput}
