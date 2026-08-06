@@ -17,6 +17,14 @@ services:
         value: nssf
       - key: DATABASE_URL
         sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
+      - key: LANGFUSE_BASE_URL
+        value: https://cloud.langfuse.com
+      - key: LANGFUSE_ENVIRONMENT
+        value: production
       - key: CORS_ORIGINS
         value: https://nicky-nssf-chatbot.onrender.com
       - key: AZURE_OPENAI_ENDPOINT

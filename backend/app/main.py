@@ -107,9 +107,11 @@
 #     return {"status": "recorded"}
 
 import json
+import time
 import uuid
+from contextlib import asynccontextmanager
 from datetime import timedelta
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -119,12 +121,23 @@ from pydantic import BaseModel
 
 from . import rag
 from .config import settings
-from .monitoring import trace_chat, trace_feedback
+from .monitoring import (
+    monitoring_enabled,
+    shutdown_monitoring,
+    trace_chat,
+    trace_feedback,
+)
 from .realtime import connect_realtime_session
 from .schemas import ChatRequest, FeedbackRequest, HistoryResponse
 from .storage import ConversationStore
 
-app = FastAPI(title="NSSF Assistant API")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    yield
+    shutdown_monitoring()
+
+
+app = FastAPI(title="NSSF Assistant API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -143,6 +156,7 @@ memory = ConversationStore(
 class AskRequest(BaseModel):
     question: str
     session_id: Optional[str] = None
+    channel: Literal["text", "voice"] = "text"
 
 
 class LiveKitTokenRequest(BaseModel):
@@ -156,7 +170,11 @@ def health():
 
 @app.get("/api/status")
 def api_status():
-    return {"ready": True, "persistent_history": memory.persistent}
+    return {
+        "ready": True,
+        "persistent_history": memory.persistent,
+        "monitoring": monitoring_enabled(),
+    }
 
 
 @app.post("/realtime/session")
@@ -218,6 +236,7 @@ def livekit_token(req: LiveKitTokenRequest = LiveKitTokenRequest()):
 
 @app.post("/api/ask")
 def api_ask(req: AskRequest):
+    started_at = time.perf_counter()
     session_id = req.session_id or str(uuid.uuid4())
     history = memory.get(session_id)
 
@@ -231,7 +250,14 @@ def api_ask(req: AskRequest):
 
     memory.add(session_id, "user", req.question)
     memory.add(session_id, "assistant", full_answer)
-    trace_chat(session_id, req.question, full_answer, citations)
+    trace_chat(
+        session_id,
+        req.question,
+        full_answer,
+        citations,
+        channel=req.channel,
+        latency_ms=round((time.perf_counter() - started_at) * 1000),
+    )
 
     return {
         "ok": True,
@@ -247,6 +273,7 @@ def chat(req: ChatRequest):
     history = memory.get(session_id)
 
     def event_stream():
+        started_at = time.perf_counter()
         full_answer = ""
         citations = []
         for event in rag.stream_answer(history, req.message):
@@ -264,7 +291,14 @@ def chat(req: ChatRequest):
                 )
         memory.add(session_id, "user", req.message)
         memory.add(session_id, "assistant", full_answer)
-        trace_chat(session_id, req.message, full_answer, citations)
+        trace_chat(
+            session_id,
+            req.message,
+            full_answer,
+            citations,
+            channel="text",
+            latency_ms=round((time.perf_counter() - started_at) * 1000),
+        )
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

@@ -59,7 +59,11 @@ class NssfAssistant(Agent):
             async with httpx.AsyncClient(timeout=40) as client:
                 response = await client.post(
                     RAG_API_URL,
-                    json={"question": question, "session_id": self.session_id},
+                    json={
+                        "question": question,
+                        "session_id": self.session_id,
+                        "channel": "voice",
+                    },
                 )
                 response.raise_for_status()
                 payload = response.json()
