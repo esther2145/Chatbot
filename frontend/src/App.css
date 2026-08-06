@@ -324,12 +324,6 @@ button:focus-visible, textarea:focus-visible, a:focus-visible {
 .service-status > span { width: 7px; height: 7px; border-radius: 50%; background: #d8a740; box-shadow: 0 0 0 4px rgba(216, 167, 64, .12); }
 .service-status.is-online { color: #287247; }
 .service-status.is-online > span { background: #27a75f; box-shadow: 0 0 0 4px rgba(39, 167, 95, .12); }
-.voice-control {
-  height: 40px; display: flex; align-items: center; gap: 7px; padding: 0 12px;
-  border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: #fff; font-size: 12px; font-weight: 600;
-}
-.voice-control.active { color: var(--nssf-blue-dark); border-color: #b7d6ed; background: var(--soft-blue); }
-
 .chat-stage { min-height: 0; flex: 1; display: flex; flex-direction: column; }
 .messages { min-height: 0; flex: 1; overflow-y: auto; padding: 34px 36px 24px; scroll-behavior: smooth; }
 .welcome-panel { max-width: 790px; margin: 2vh auto 38px; text-align: center; }
@@ -374,8 +368,7 @@ button:focus-visible, textarea:focus-visible, a:focus-visible {
 .composer textarea { flex: 1; max-height: 130px; min-height: 42px; padding: 11px 0 7px; resize: none; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 14px; line-height: 1.5; }
 .composer textarea::placeholder { color: #98a39c; }
 .composer-actions { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
-.composer-actions .live-voice-launch,
-.composer-actions .voice-control { height: 42px; }
+.composer-actions .live-voice-launch { height: 42px; }
 .composer-icon, .send-button { width: 42px; height: 42px; display: grid; place-items: center; border: 0; border-radius: 12px; }
 .composer-icon { color: #64736a; background: #f1f5f2; }
 .composer-icon:hover { color: var(--nssf-blue); background: #e8f3fa; }
@@ -402,9 +395,8 @@ button:focus-visible, textarea:focus-visible, a:focus-visible {
 
 @media (max-width: 620px) {
   .workspace-header { min-height: 76px; padding: 13px 16px; }
-  .eyebrow, .service-status, .voice-control span { display: none; }
+  .eyebrow, .service-status { display: none; }
   .header-left h1 { font-size: 18px; }
-  .voice-control { width: 40px; padding: 0; justify-content: center; }
   .messages { padding: 25px 16px 16px; }
   .welcome-panel { margin-top: 0; }
   .welcome-panel h2 { font-size: 21px; }

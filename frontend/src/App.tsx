@@ -13,11 +13,9 @@ import {
   Sparkles,
   Square,
   Trash2,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
-import { speakText, startListening } from "./utils/speech";
+import { startListening } from "./utils/speech";
 import {
   LiveVoice,
   type CallTranscriptMessage,
@@ -81,7 +79,6 @@ function App() {
     () => localStorage.getItem("nssf_active_id") || ""
   );
   const [question, setQuestion] = useState("");
-  const [voiceReplies, setVoiceReplies] = useState(true);
   const [listening, setListening] = useState(false);
   const [loading, setLoading] = useState(false);
   const [online, setOnline] = useState(false);
@@ -198,7 +195,6 @@ function App() {
           },
         ],
       }));
-      speakText(answer, voiceReplies);
     } catch (error: any) {
       if (error.name === "AbortError" || controllerRef.current !== controller) return;
       const errorMessage =
@@ -528,15 +524,6 @@ function App() {
                 >
                   <Headphones size={18} />
                   <span>Live voice</span>
-                </button>
-                <button
-                  className={`voice-control ${voiceReplies ? "active" : ""}`}
-                  onClick={() => setVoiceReplies((value) => !value)}
-                  aria-label={`Turn spoken answers ${voiceReplies ? "off" : "on"}`}
-                  title="Toggle spoken answers"
-                >
-                  {voiceReplies ? <Volume2 size={18} /> : <VolumeX size={18} />}
-                  <span>Voice {voiceReplies ? "on" : "off"}</span>
                 </button>
                 <button
                   className={`composer-icon ${listening ? "listening" : ""}`}
