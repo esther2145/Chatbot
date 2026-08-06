@@ -120,6 +120,12 @@ async def nssf_voice_agent(ctx: agents.JobContext):
     room_parts = ctx.room.name.split("__")
     session_id = room_parts[1] if len(room_parts) == 3 else str(uuid.uuid4())
     session = AgentSession(llm=azure_realtime_model())
+
+    @ctx.room.local_participant.register_rpc_method("interrupt_agent")
+    async def interrupt_agent(_data):
+        await session.interrupt(force=True)
+        return "stopped"
+
     await session.start(room=ctx.room, agent=NssfAssistant(session_id))
     await session.generate_reply(
         instructions=(
