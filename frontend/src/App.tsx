@@ -308,7 +308,6 @@ function App() {
         <LiveVoice
           key={liveVoiceInstanceId}
           apiBase={API_BASE}
-          conversationSessionId={activeConversation.sessionId}
           onClose={() => setLiveVoiceOpen(false)}
           onCallComplete={saveCallTranscript}
         />

@@ -188,7 +188,8 @@ async def realtime_session():
 
 @app.post("/livekit/token")
 def livekit_token(req: LiveKitTokenRequest = LiveKitTokenRequest()):
-    """Create a short-lived, room-scoped token for one browser participant."""
+    """Create a short-lived token with an isolated session for every voice call."""
+    del req  # Kept in the request schema for backward-compatible clients.
     if not (
         settings.livekit_url
         and settings.livekit_api_key
@@ -204,7 +205,10 @@ def livekit_token(req: LiveKitTokenRequest = LiveKitTokenRequest()):
             },
         )
 
-    session_id = str(req.session_id or uuid.uuid4())
+    # A call must never inherit a text chat or previous call's RAG history.
+    # The transcript can still be displayed in the selected UI conversation,
+    # but the voice agent always starts with a clean server-side session.
+    session_id = str(uuid.uuid4())
     room_name = f"nssf__{session_id}__{uuid.uuid4().hex[:10]}"
     identity = f"web-{uuid.uuid4().hex}"
     token = (

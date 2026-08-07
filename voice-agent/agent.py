@@ -127,9 +127,11 @@ async def nssf_voice_agent(ctx: agents.JobContext):
     await session.start(room=ctx.room, agent=NssfAssistant(session_id))
     await session.generate_reply(
         instructions=(
-            "Greet the user briefly as Nicky and invite them to ask an NSSF "
-            "question. Speak only in English with the same voice and accent "
-            "for the complete response."
+            "This is the first turn of a completely new call. Do not use or "
+            "mention any earlier topic, question, balance, or conversation. "
+            "Do not call a tool. Only greet the user briefly as Nicky and "
+            "invite them to ask an NSSF question. Speak only in English with "
+            "the same voice and accent for the complete response."
         )
     )
 
