@@ -1,402 +1,295 @@
-# NSSF Assistant (Nicky): Complete Architecture Documentation
+# Nicky — NSSF Uganda Chatbot Architecture
 
-## 1. Purpose
+## 1. Architecture overview
 
-Nicky is a retrieval-augmented generation (RAG) chatbot for NSSF Uganda. It
-retrieves relevant passages collected from NSSF sources and instructs an Azure
-OpenAI Realtime model to answer from those passages. The project includes a
-React interface, FastAPI service, offline ingestion pipeline, Qdrant vector
-search, conversation memory, citations, browser speech, and optional Langfuse
-monitoring.
+Nicky is a multimodal retrieval-augmented generation (RAG) assistant for NSSF
+Uganda. Users can communicate through typed chat, microphone dictation, or a
+real-time LiveKit voice call. Answers are grounded in NSSF information stored
+in Qdrant, while Azure OpenAI provides embeddings, response generation,
+transcription, and speech.
 
-The design separates two workloads:
+The solution has two distinct paths:
 
-1. **Offline ingestion** collects, chunks, embeds, and indexes NSSF content.
-2. **Online answering** embeds a question, retrieves relevant chunks, and
-   generates a grounded response.
+- **Knowledge ingestion:** NSSF content is collected, cleaned, divided into
+  chunks, converted into embeddings, and stored in Qdrant.
+- **Conversation serving:** A user question is embedded, matched against
+  Qdrant, combined with relevant context, and sent to Azure OpenAI to produce
+  a grounded answer.
 
-## 2. System Context
+## 2. High-level system architecture
 
 ```mermaid
 flowchart LR
-    User[User in browser] --> UI[React + Vite frontend]
-    UI -->|HTTP JSON| API[FastAPI backend :8001]
-    UI -->|Browser speech APIs| Speech[Microphone and speech synthesis]
-    API -->|Embed question| Embed[Azure embedding deployment]
-    API -->|Vector search| Q[(Qdrant :6333)]
-    API -->|Text over WebSocket| RT[Azure gpt-realtime-mini]
-    API -. optional traces .-> LF[Langfuse]
-    Ingest[Python ingestion pipeline] -->|Scrape| Web[NSSF web sources]
-    Ingest -->|Embed chunks| Embed
-    Ingest -->|Upsert vectors + payloads| Q
+    User((NSSF user))
+
+    subgraph Client[Client layer]
+        UI[React + TypeScript web app]
+        Local[(Browser localStorage)]
+        Mic[Microphone]
+        UI <--> Local
+        Mic --> UI
+    end
+
+    subgraph App[Application layer]
+        API[FastAPI REST API]
+        Agent[LiveKit voice agent]
+        Memory[Conversation store]
+    end
+
+    subgraph Knowledge[Knowledge layer]
+        Qdrant[(Qdrant vector database)]
+        Postgres[(PostgreSQL history - optional)]
+    end
+
+    subgraph AI[AI services]
+        Embed[Azure OpenAI embeddings]
+        Model[Azure OpenAI response model]
+        Speech[Azure OpenAI realtime speech]
+    end
+
+    subgraph Operations[Operations]
+        LiveKit[LiveKit Cloud]
+        Langfuse[Langfuse monitoring]
+    end
+
+    subgraph Pipeline[Offline ingestion pipeline]
+        Sources[NSSF website + curated content]
+        Scraper[Python + Playwright scraper]
+        Chunker[Cleaning + chunking]
+    end
+
+    User <--> UI
+    UI -->|HTTPS: text question| API
+    UI <-->|WebRTC: live audio| LiveKit
+    LiveKit <--> Agent
+    Agent -->|Grounded question| API
+    API --> Memory
+    Memory <--> Postgres
+    API -->|Embed query| Embed
+    API -->|Similarity search| Qdrant
+    API -->|Prompt + retrieved context| Model
+    Agent <--> Speech
+    API -.->|Traces, latency, feedback| Langfuse
+    Sources --> Scraper --> Chunker
+    Chunker -->|Embed content| Embed
+    Chunker -->|Vectors + text + source URL| Qdrant
+
+    classDef client fill:#e8f3ff,stroke:#2563eb,color:#172554;
+    classDef app fill:#ecfdf5,stroke:#059669,color:#064e3b;
+    classDef data fill:#fff7ed,stroke:#ea580c,color:#7c2d12;
+    classDef external fill:#faf5ff,stroke:#9333ea,color:#581c87;
+    class UI,Local,Mic client;
+    class API,Agent,Memory,Scraper,Chunker app;
+    class Qdrant,Postgres data;
+    class Embed,Model,Speech,LiveKit,Langfuse external;
 ```
 
-During development, the frontend and ingestion process run on the host. Docker
-Compose runs FastAPI and Qdrant. Azure and Langfuse are external services.
+### Architectural style
 
-## 3. Technology Stack
+The system combines layered web architecture, retrieval-augmented generation,
+event-driven real-time voice communication, batch data processing, and managed
+cloud services.
 
-| Layer | Technology | Responsibility |
+## 3. Core components
+
+| Component | Technology | Main responsibility |
 |---|---|---|
-| Web UI | React 19, TypeScript, Vite | Chat UI, browser persistence and voice |
-| API | FastAPI, Uvicorn, Pydantic | Routes, validation and orchestration |
-| Retrieval | Qdrant | Persistent vector storage and similarity search |
-| Embeddings | Azure `text-embedding-3-small` deployment | Document/query vectors |
-| Generation | Azure `gpt-realtime-mini` | Grounded text over Realtime WebSocket |
-| Ingestion | Python, Playwright, Azure OpenAI SDK | Scrape, chunk, embed and index |
-| Monitoring | Langfuse (optional) | Chat traces and feedback |
-| Runtime | Docker Compose | Backend and Qdrant containers |
+| Web client | React, TypeScript, Vite | Presents chat history, accepts typed or dictated questions, starts voice calls, and displays citations |
+| API service | FastAPI, Pydantic, Uvicorn | Validates requests, manages sessions, orchestrates retrieval and generation, and issues short-lived LiveKit tokens |
+| RAG service | Python, Azure OpenAI SDK | Embeds questions, retrieves context, constructs prompts, and generates grounded answers |
+| Vector database | Qdrant | Stores NSSF content embeddings and performs similarity search |
+| Conversation store | PostgreSQL with in-memory fallback | Stores recent text and voice conversation turns |
+| Voice agent | LiveKit Agents SDK | Manages calls, English transcription, speech responses, and verified RAG requests |
+| Ingestion pipeline | Python, Playwright | Scrapes NSSF pages, cleans and chunks text, embeds it, and updates Qdrant |
+| AI platform | Azure OpenAI | Provides embeddings, generated responses, transcription, and speech synthesis |
+| Monitoring | Langfuse | Records traces, latency, channel, citations, sessions, and feedback when configured |
+| Hosting | Render and LiveKit Cloud | Hosts the web/API services and managed voice worker |
 
-## 4. Repository Structure
-
-```text
-Chatbot/
-|-- .env                     Local secrets/configuration (do not commit)
-|-- .env.example             Configuration template
-|-- docker-compose.yml       Qdrant and backend services
-|-- ARCHITECTURE.md          This document
-|-- README.md                Quick start
-|-- frontend/
-|   |-- src/App.tsx          Active UI and REST integration
-|   |-- src/utils/speech.ts  Browser speech input/output
-|   |-- src/hooks/chat.ts    Alternative SSE chat hook
-|   `-- vite.config.ts       Development proxy
-|-- backend/
-|   |-- Dockerfile
-|   |-- requirements.txt
-|   `-- app/
-|       |-- main.py          FastAPI app and routes
-|       |-- rag.py           Embedding, retrieval, prompt and generation
-|       |-- config.py        Environment-backed settings
-|       |-- memory.py        In-process conversation memory
-|       |-- schemas.py       API models
-|       |-- realtime.py      Realtime connectivity diagnostic
-|       `-- monitoring.py    Optional Langfuse integration
-`-- ingestion/
-    |-- ingest.py            Offline scrape-to-Qdrant pipeline
-    `-- requirements.txt
-```
-
-`backend/ui.py`, `backend/web_ui.py`, `backend/web_uic.py`,
-`backend/assistant.py`, root `main.py`, and `backend/chat_db.py` are older or
-alternative interfaces. They are not imported by the active Dockerized React
-and FastAPI application.
-
-## 5. Online Question-Answering Flow
-
-The active React UI calls `POST /api/ask`:
+## 4. Text conversation flow
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant F as React frontend
-    participant A as FastAPI
-    participant E as Azure embeddings
+    autonumber
+    actor User
+    participant UI as React web client
+    participant API as FastAPI API
+    participant DB as Conversation store
+    participant AOAI as Azure OpenAI
     participant Q as Qdrant
-    participant R as Azure Realtime
+    participant LF as Langfuse
 
-    U->>F: Submit question
-    F->>A: POST /api/ask {question, session_id}
-    A->>A: Load recent session history
-    A->>E: Embed question
-    E-->>A: Query vector
-    A->>Q: Similarity search
-    Q-->>A: Scored chunks and URLs
-    alt No chunk meets threshold
-        A-->>F: Safe no-answer response
-    else Relevant context exists
-        A->>A: Build prompt + history + context
-        A->>R: Open authenticated WebSocket
-        A->>R: conversation.item.create events
-        A->>R: response.create (text only)
-        R-->>A: Text delta events
-        A->>A: Assemble answer and citations
-        A->>A: Save completed turn
-        A-->>F: answer, citations, session_id
-    end
-    F-->>U: Render and optionally speak answer
+    User->>UI: Enter a question
+    UI->>API: POST /api/ask
+    API->>DB: Load recent session history
+    API->>AOAI: Create question embedding
+    AOAI-->>API: Query vector
+    API->>Q: Search similar NSSF chunks
+    Q-->>API: Context and source URLs
+    API->>AOAI: Send prompt, history, and context
+    AOAI-->>API: Grounded answer
+    API->>DB: Store user and assistant turns
+    API-->>LF: Record trace and latency
+    API-->>UI: Answer, citations, and session ID
+    UI-->>User: Display response and sources
 ```
 
-### 5.1 Retrieval
+The browser stores displayed conversations in `localStorage`. The backend
+stores conversational context separately, using PostgreSQL when
+`DATABASE_URL` is configured and an in-memory fallback otherwise.
 
-`backend/app/rag.py` embeds each question with the Azure embedding deployment.
-It searches the Qdrant collection using:
+## 5. Live voice conversation flow
 
-- `TOP_K` candidates (default 5)
-- `SCORE_THRESHOLD` filtering (default 0.2)
-- payloads containing source text and URL
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as React web client
+    participant API as FastAPI API
+    participant LK as LiveKit Cloud
+    participant Agent as Nicky voice agent
+    participant Speech as Azure realtime speech
+    participant RAG as RAG answer service
 
-Online queries must use the same embedding model as ingestion. Switching
-embedding models can change vector dimensions and meaning, so the collection
-must be re-ingested after such a change.
+    User->>UI: Start live voice
+    UI->>API: POST /livekit/token
+    API-->>UI: Short-lived room token and new call session ID
+    UI->>LK: Join room over WebRTC
+    LK->>Agent: Dispatch voice-agent job
+    Agent->>Speech: Start English audio session
+    Agent-->>User: Give a neutral greeting
+    User->>LK: Speak question
+    LK->>Agent: Stream microphone audio
+    Agent->>Speech: Transcribe and interpret speech
+    Agent->>RAG: POST /api/ask with channel=voice
+    RAG-->>Agent: Verified NSSF answer
+    Agent->>Speech: Generate spoken response
+    Speech-->>User: Stream answer audio
+    UI->>UI: Save call transcript in selected chat
+```
 
-### 5.2 Prompt and grounding
+Each voice call receives a new backend session ID. This prevents a new call
+from inheriting the topic or response context of a previous call. The completed
+transcript can still be added to the selected conversation in the web UI.
 
-`SYSTEM_PROMPT` in `rag.py` controls identity, tone, grounding, and safety.
-Retrieved chunks are appended as NSSF context. Recent messages support
-follow-up questions. If no result meets the threshold, `NO_ANSWER` is returned
-without calling the generation model.
-
-### 5.3 Realtime generation
-
-The application uses `gpt-realtime-mini` over Azure Realtime WebSockets because
-the available deployment does not support Chat Completions. Prompt messages are
-sent as conversation items, followed by a text-only `response.create` event.
-
-Content types are role-sensitive:
-
-- System and user messages use `input_text`.
-- Previous assistant messages use `text`.
-- The deployment uses temperature `0.6`, its supported minimum.
-
-Each answer currently opens a new WebSocket. The backend assembles the deltas
-and returns complete JSON through `/api/ask`; `/chat` exposes SSE streaming.
-
-### 5.4 Conversation memory
-
-`SessionMemory` stores recent messages inside the backend process:
-
-- A UUID identifies a session.
-- The first request omits `session_id`; the backend returns one.
-- At most `MAX_TURNS * 2` messages are retained.
-- Sessions expire after `SESSION_TTL_SECONDS`.
-- A lock protects memory from concurrent access.
-
-Memory is lost when the container restarts and is not shared across replicas.
-Production scaling should use Redis or another shared store.
-
-The frontend separately stores displayed conversations in browser
-`localStorage`. That survives page refreshes but cannot restore backend context
-after backend memory expires or restarts.
-
-## 6. Offline Ingestion
-
-`ingestion/ingest.py` is a batch job and is not started by Compose.
+## 6. Knowledge ingestion flow
 
 ```mermaid
 flowchart LR
-    Sources[Seed URLs + curated documents] --> Browser[Headless Playwright]
-    Browser --> Clean[Clean text]
-    Clean --> Chunk[Overlapping chunks]
-    Chunk --> AE[Azure embeddings]
-    AE --> Vectors[Vectors]
-    Vectors --> Upsert[Qdrant upsert]
-    Chunk --> Upsert
-    Sources --> Upsert
-    Upsert --> Collection[(nssf collection)]
+    A[NSSF seed URLs] --> B[Playwright browser]
+    C[Curated NSSF documents] --> D[Text preparation]
+    B --> D
+    D --> E[Clean and normalize]
+    E --> F[Create overlapping chunks]
+    F --> G[Azure embedding deployment]
+    G --> H[Embedding vectors]
+    F --> I[Text + URL + source metadata]
+    H --> J[(Qdrant collection)]
+    I --> J
 ```
 
-The pipeline:
+Ingestion is an offline administrative process. It is run during initial
+setup, after changing the embedding model, and whenever NSSF source material
+needs to be refreshed. The same embedding deployment must be used for both
+stored documents and live questions.
 
-1. Loads `.env` from the project root.
-2. Includes curated high-value NSSF documents.
-3. Opens seed pages in headless Chromium.
-4. Scrolls pages to render lazy-loaded content.
-5. Extracts and normalizes visible text.
-6. Creates overlapping chunks.
-7. Embeds chunks with Azure.
-8. Creates the collection using the detected vector size when absent.
-9. Upserts vectors with `text`, `url`, and `source` payload fields.
+## 7. Production deployment architecture
 
-Run it during initial setup, after changing embedding models or collections,
-and whenever source material needs refreshing.
+```mermaid
+flowchart TB
+    User((User browser))
 
-## 7. Frontend Architecture
+    subgraph Render[Render Cloud]
+        Frontend[Static React site]
+        Backend[Dockerized FastAPI service]
+    end
 
-The active UI is `frontend/src/App.tsx`.
+    subgraph Managed[Managed services]
+        LK[LiveKit Cloud and deployed agent]
+        Azure[Azure OpenAI]
+        Q[(Qdrant Cloud)]
+        DB[(Hosted PostgreSQL - optional)]
+        LF[Langfuse Cloud - optional]
+    end
 
-### State and persistence
+    Repo[GitHub repository] -->|Automatic deployment| Frontend
+    Repo -->|Automatic deployment| Backend
+    Repo -->|LiveKit CLI deployment| LK
+    User -->|HTTPS| Frontend
+    Frontend -->|HTTPS API| Backend
+    User <-->|WebRTC| LK
+    LK -->|HTTPS RAG request| Backend
+    Backend <--> Azure
+    LK <--> Azure
+    Backend <--> Q
+    Backend <--> DB
+    Backend -.-> LF
+```
 
-- React state holds conversations, active conversation, input, loading state,
-  backend status, microphone state, and voice preference.
-- Conversations use `nssf_conversations` in `localStorage`.
-- The active ID uses `nssf_active_id`.
-- `AbortController` cancels an earlier browser request when necessary.
+### Deployment responsibilities
 
-### Backend interaction
+- **Render static service:** builds and publishes the Vite frontend.
+- **Render web service:** builds the backend Docker image and exposes the API.
+- **LiveKit Cloud:** runs the voice-agent worker and transports live audio.
+- **Qdrant:** retains the searchable NSSF knowledge base.
+- **PostgreSQL:** retains conversation history when configured.
+- **Langfuse:** receives optional observability data without interrupting chat.
 
-- `GET /api/status` is polled for Online/Connecting state.
-- `POST /api/ask` sends `{question, session_id}`.
-- Non-2xx responses are handled as backend errors.
-- Development API base: `http://127.0.0.1:8001`.
+## 8. Main API interfaces
 
-Production should replace the hard-coded API address with an environment
-variable or relative `/api` path behind a reverse proxy.
-
-### Voice
-
-Voice uses browser APIs rather than Azure audio:
-
-- Speech recognition converts microphone input to text.
-- Speech synthesis reads assistant responses.
-- Microphone permission is required.
-- Chrome and Edge generally offer the best support.
-- Remote microphone access normally requires HTTPS; localhost is allowed as a
-  secure development context by supported browsers.
-
-## 8. Backend API
-
-| Method | Route | Purpose |
+| Method | Endpoint | Purpose |
 |---|---|---|
-| GET | `/health` | Process health: `{"status":"ok"}` |
-| GET | `/api/status` | Frontend availability: `{"ready":true}` |
-| POST | `/api/ask` | Complete JSON answer, citations and session ID |
-| POST | `/chat` | SSE token and completion events |
-| GET | `/chat/history/{session_id}` | Current in-memory history |
-| POST | `/feedback` | Optional Langfuse feedback |
-| POST | `/realtime/session` | Diagnostic Realtime connection |
-| GET | `/docs` | Generated Swagger UI |
+| `GET` | `/health` | Hosting health check |
+| `GET` | `/api/status` | Reports backend, history, and monitoring readiness |
+| `POST` | `/api/ask` | Returns a complete grounded answer with citations |
+| `POST` | `/chat` | Streams answer events using server-sent events |
+| `GET` | `/chat/history/{session_id}` | Retrieves stored backend conversation history |
+| `POST` | `/feedback` | Records user feedback |
+| `POST` | `/livekit/token` | Creates a short-lived, room-scoped voice token |
 
-The active `App.tsx` uses `/api/status` and `/api/ask`. The alternative
-`frontend/src/hooks/chat.ts` uses `/chat`.
+## 9. Security and reliability controls
 
-## 9. Docker and Networking
+- LiveKit API secrets remain on the backend; browsers receive only
+  short-lived room tokens.
+- Azure, Qdrant, database, and Langfuse secrets are supplied through server
+  environment variables and must not be included in frontend variables.
+- CORS restricts production browser access to the deployed frontend origin.
+- RAG grounding tells the model to use retrieved NSSF content and avoid
+  inventing policies, figures, or personal account details.
+- Monitoring is failure-isolated: missing keys or a Langfuse outage cannot
+  stop a response.
+- PostgreSQL failures fall back to in-memory history so the API remains
+  available, although persistence is temporarily lost.
+- Every voice call uses an isolated session to prevent context leakage.
 
-### Qdrant service
+## 10. Current limitations and recommended improvements
 
-- Image: `qdrant/qdrant:latest`
-- Port mapping: `6333:6333`
-- Persistent volume: `qdrant_data`
+| Current limitation | Recommended improvement |
+|---|---|
+| The active text UI waits for the complete `/api/ask` response | Adopt the existing `/chat` SSE endpoint for visible token streaming |
+| In-memory history is used when no database is configured | Configure managed PostgreSQL in every production environment |
+| Ingestion is manually initiated | Schedule ingestion and record content/index versions |
+| Qdrant uses a single active collection | Introduce versioned collections and aliases for safe index updates |
+| The backend and voice worker depend on external AI services | Add retry policies, timeout metrics, and user-friendly degraded responses |
+| There is no end-user authentication | Add identity and authorization before exposing account-specific features |
+| The frontend bundle is large | Load LiveKit voice code only when a call starts |
 
-### Backend service
+## 11. Exporting the diagrams
 
-- Built from `backend/Dockerfile`
-- Uvicorn listens on container port 8001
-- Port mapping: `8001:8001`
-- Loads root `.env`
-- Uses `QDRANT_URL=http://qdrant:6333` internally
-- Depends on Qdrant
+The diagrams use Mermaid, which GitHub renders directly. A standalone copy of
+the main diagram is available at
+[`docs/system-architecture.mmd`](docs/system-architecture.mmd).
 
-`depends_on` orders startup but does not guarantee readiness. Production should
-add service health checks and retries.
+Export options:
 
-The frontend is not a Compose service. Vite normally runs on host port 5173.
+1. Paste the `.mmd` file into <https://mermaid.live> and select **Actions →
+   Export** to download SVG, PNG, or PDF.
+2. With Mermaid CLI, run:
 
-## 10. Configuration
+   ```powershell
+   npx --yes @mermaid-js/mermaid-cli `
+     -i docs/system-architecture.mmd `
+     -o docs/system-architecture.svg `
+     -b transparent
+   ```
 
-Never commit `.env` or credentials. Rotate any key exposed in chat, logs,
-screenshots, or source control.
-
-| Variable | Required | Description |
-|---|---:|---|
-| `AZURE_OPENAI_ENDPOINT` | Yes | Realtime resource endpoint |
-| `AZURE_OPENAI_API_KEY` | Yes | Realtime resource key |
-| `AZURE_OPENAI_DEPLOYMENT` | Yes | Realtime deployment name |
-| `AZURE_OPENAI_API_VERSION` | Yes | Realtime API version |
-| `AZURE_EMBED_ENDPOINT` | Yes | Embedding resource endpoint |
-| `AZURE_EMBED_API_KEY` | Yes | Embedding resource key |
-| `AZURE_EMBED_DEPLOYMENT` | Yes | Exact embedding deployment name |
-| `AZURE_EMBED_API_VERSION` | Yes | Embedding API version |
-| `QDRANT_URL` | Usually | Qdrant URL; Compose overrides it for backend |
-| `COLLECTION` | No | Collection name, default `nssf` |
-| `TOP_K` | No | Retrieved candidates, default 5 |
-| `SCORE_THRESHOLD` | No | Minimum similarity, default 0.2 |
-| `MAX_TURNS` | No | Recent turns, default 8 |
-| `SESSION_TTL_SECONDS` | No | Session TTL, default 3600 seconds |
-| `LANGFUSE_PUBLIC_KEY` | No | Optional monitoring key |
-| `LANGFUSE_SECRET_KEY` | No | Optional monitoring secret |
-| `LANGFUSE_HOST` | No | Langfuse URL |
-
-`AZURE_CHAT_*` variables are reserved for a future Chat Completions deployment;
-the current generation path uses the `AZURE_OPENAI_*` Realtime settings.
-
-## 11. Setup and Operation
-
-### Start backend and Qdrant
-
-```powershell
-docker compose up -d --build
-docker compose ps
-```
-
-```powershell
-Invoke-RestMethod http://localhost:8001/health
-Invoke-RestMethod http://localhost:8001/api/status
-```
-
-### Run ingestion
-
-```powershell
-cd ingestion
-pip install -r requirements.txt
-playwright install chromium
-python ingest.py
-```
-
-### Start frontend
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-Open the Vite URL, normally `http://localhost:5173`.
-
-### Test without the UI
-
-```powershell
-Invoke-RestMethod `
-  -Method Post `
-  -Uri http://localhost:8001/api/ask `
-  -ContentType "application/json" `
-  -Body '{"question":"What is NSSF?","session_id":null}'
-```
-
-## 12. Monitoring and Troubleshooting
-
-```powershell
-docker compose ps -a
-docker compose logs --tail 200 backend
-docker compose logs -f backend
-```
-
-| Symptom | Likely cause | Resolution |
-|---|---|---|
-| `404` at `/` | No root route | Use `/docs`, `/health`, or an API route |
-| `DeploymentNotFound` | Wrong embedding deployment/endpoint | Check exact `AZURE_EMBED_*` values |
-| Vector dimension error | Different ingestion/query models | Recreate and re-ingest collection |
-| Unsupported operation | Realtime model called via Chat Completions | Use the Realtime generation path |
-| `input_text` must be `text` | Assistant history has wrong content type | Preserve role-specific types |
-| Frontend cannot connect | Hidden backend error or wrong address | Check browser Network tab and logs |
-| Backend exits | Missing setting or import error | Inspect `docker compose logs backend` |
-| Voice fails | Permission/browser/insecure HTTP | Allow mic, use Chrome/Edge and HTTPS |
-
-Langfuse is defensive: monitoring failures are logged and should not stop chat.
-
-## 13. Security and Production Readiness
-
-Before production:
-
-1. Restrict CORS instead of allowing every origin.
-2. Store secrets in a managed secret store.
-3. Use HTTPS and an authenticated reverse proxy.
-4. Add rate limits, request limits, timeouts, and structured errors.
-5. Replace in-memory sessions with Redis/shared storage.
-6. Pin the Qdrant image version rather than `latest`.
-7. Add Docker health checks and Qdrant retry logic.
-8. Do not expose upstream error details publicly.
-9. Define retention/privacy rules for conversations and traces.
-10. Add automated API, retrieval, multi-turn, and grounding tests.
-
-## 14. Extension Points
-
-- Edit response behavior in `SYSTEM_PROMPT` and `NO_ANSWER` in `rag.py`.
-- Tune retrieval using `TOP_K` and `SCORE_THRESHOLD`.
-- Edit ingestion sources in `SEED_URLS` and `CURATED_DOCS`.
-- Replace browser speech with Azure Realtime speech-to-speech audio.
-- Serve the built frontend through Nginx and proxy `/api` to FastAPI.
-- Add hybrid vector/keyword retrieval and reranking.
-- Schedule ingestion and use versioned Qdrant collections.
-
-## 15. Current Limitations
-
-- `/api/ask` returns only after assembling the full answer; the active UI does
-  not yet consume the available `/chat` SSE stream.
-- A new Azure WebSocket is opened for each generated answer.
-- Frontend display persistence and backend context have different lifetimes.
-- There is no authentication or per-user authorization.
-- Qdrant collections have no migration/version alias workflow.
-- The frontend API address is development-specific and hard-coded.
-- Legacy interfaces remain in the repository and should eventually be archived.
-
+SVG is recommended for a report because it remains sharp when resized.

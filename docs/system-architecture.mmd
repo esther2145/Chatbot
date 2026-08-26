@@ -1,0 +1,63 @@
+flowchart LR
+    User((NSSF user))
+
+    subgraph Client[Client layer]
+        UI[React + TypeScript web app]
+        Local[(Browser localStorage)]
+        Mic[Microphone]
+        UI <--> Local
+        Mic --> UI
+    end
+
+    subgraph App[Application layer]
+        API[FastAPI REST API]
+        Agent[LiveKit voice agent]
+        Memory[Conversation store]
+    end
+
+    subgraph Knowledge[Knowledge layer]
+        Qdrant[(Qdrant vector database)]
+        Postgres[(PostgreSQL history - optional)]
+    end
+
+    subgraph AI[AI services]
+        Embed[Azure OpenAI embeddings]
+        Model[Azure OpenAI response model]
+        Speech[Azure OpenAI realtime speech]
+    end
+
+    subgraph Operations[Operations]
+        LiveKit[LiveKit Cloud]
+        Langfuse[Langfuse monitoring]
+    end
+
+    subgraph Pipeline[Offline ingestion pipeline]
+        Sources[NSSF website + curated content]
+        Scraper[Python + Playwright scraper]
+        Chunker[Cleaning + chunking]
+    end
+
+    User <--> UI
+    UI -->|HTTPS: text question| API
+    UI <-->|WebRTC: live audio| LiveKit
+    LiveKit <--> Agent
+    Agent -->|Grounded question| API
+    API --> Memory
+    Memory <--> Postgres
+    API -->|Embed query| Embed
+    API -->|Similarity search| Qdrant
+    API -->|Prompt + retrieved context| Model
+    Agent <--> Speech
+    API -.->|Traces, latency, feedback| Langfuse
+    Sources --> Scraper --> Chunker
+    Chunker -->|Embed content| Embed
+    Chunker -->|Vectors + text + source URL| Qdrant
+
+    classDef client fill:#e8f3ff,stroke:#2563eb,color:#172554;
+    classDef app fill:#ecfdf5,stroke:#059669,color:#064e3b;
+    classDef data fill:#fff7ed,stroke:#ea580c,color:#7c2d12;
+    classDef external fill:#faf5ff,stroke:#9333ea,color:#581c87;
+    class UI,Local,Mic client;
+    class API,Agent,Memory,Scraper,Chunker app;
+    class Qdrant,Postgres data;
+    class Embed,Model,Speech,LiveKit,Langfuse external;
