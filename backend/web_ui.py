@@ -1,8 +1,14 @@
-import argparse
 import json
 import os
+import sys
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import traceback
+from http.server import BaseHTTPRequestHandler
+
+for _stream in (sys.stdout, sys.stderr):
+    _reconfigure = getattr(_stream, "reconfigure", None)
+    if callable(_reconfigure):
+        _reconfigure(encoding="utf-8", errors="replace")
 
 from dotenv import load_dotenv
 from assistant import NSSFAssistant
@@ -13,7 +19,10 @@ ENV_FILE = os.path.join(BASE_DIR, ".env")
 
 load_dotenv(ENV_FILE)
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+AZURE_CHAT_API_KEY = os.getenv("AZURE_CHAT_API_KEY", "").strip()
+AZURE_CHAT_ENDPOINT = os.getenv("AZURE_CHAT_ENDPOINT", "").strip()
+AZURE_CHAT_DEPLOYMENT = os.getenv("AZURE_CHAT_DEPLOYMENT", "").strip()
+AZURE_CHAT_API_VERSION = os.getenv("AZURE_CHAT_API_VERSION", "2024-12-01-preview").strip()
 
 
 class AppState:
@@ -25,9 +34,19 @@ class AppState:
         self.lock = threading.Lock()
 
     def load(self):
-        if not GROQ_API_KEY:
+        if not AZURE_CHAT_API_KEY:
             self.status = "Missing API key"
-            self.error = "GROQ_API_KEY is missing. Add it to backend/.env"
+            self.error = "AZURE_CHAT_API_KEY is missing. Add it to backend/.env"
+            return
+
+        if not AZURE_CHAT_ENDPOINT:
+            self.status = "Missing endpoint"
+            self.error = "AZURE_CHAT_ENDPOINT is missing. Add it to backend/.env"
+            return
+
+        if not AZURE_CHAT_DEPLOYMENT:
+            self.status = "Missing deployment"
+            self.error = "AZURE_CHAT_DEPLOYMENT is missing. Add it to backend/.env"
             return
 
         try:
@@ -45,7 +64,10 @@ class AppState:
 
             self.status = "Connecting assistant..."
             self.assistant = NSSFAssistant(
-                api_key=GROQ_API_KEY,
+                api_key=AZURE_CHAT_API_KEY,
+                endpoint=AZURE_CHAT_ENDPOINT,
+                deployment=AZURE_CHAT_DEPLOYMENT,
+                api_version=AZURE_CHAT_API_VERSION,
                 nssf_context=context,
             )
 
@@ -55,6 +77,7 @@ class AppState:
         except Exception as exc:
             self.status = "Startup failed"
             self.error = str(exc)
+            traceback.print_exc()
 
     def ask(self, question):
         if not self.ready or not self.assistant:
@@ -139,24 +162,21 @@ class WebUIHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def log_message(self, format, *args):
+        if self.path == "/api/status" and str(args[1]) == "200":
+            return
         print("[Backend]", format % args)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run NSSF chatbot backend.")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", default=8001, type=int)
-    args = parser.parse_args()
-
-    threading.Thread(target=STATE.load, daemon=True).start()
-
-    server = ThreadingHTTPServer((args.host, args.port), WebUIHandler)
-    url = f"http://{args.host}:{args.port}"
-
-    print(f"Backend running at {url}")
-    print(f"Status endpoint: {url}/api/status")
-
-    server.serve_forever()
+    print(
+        "web_ui.py is retired. It served port 8001 with an old Groq-based "
+        "prototype and kept stealing the port from the real backend "
+        "(backend/app/main.py), which the frontend actually talks to.\n\n"
+        "Start the real backend instead, from the project root:\n"
+        "  docker compose up -d qdrant backend\n",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
 
 
 if __name__ == "__main__":
